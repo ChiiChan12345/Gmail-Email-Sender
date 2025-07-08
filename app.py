@@ -88,9 +88,14 @@ def get_db():
 @app.route('/')
 def index():
     """Main homepage - shows landing page for non-authenticated users, dashboard for authenticated users"""
+    print(f"DEBUG: Index route - credentials in session: {bool(session.get('credentials'))}")
+    print(f"DEBUG: Session keys: {list(session.keys())}")
+    
     if 'credentials' not in session:
+        print("DEBUG: No credentials found, showing homepage")
         return render_template('index.html')
     
+    print("DEBUG: Credentials found, showing dashboard")
     # Get statistics for authenticated users
     conn = get_db()
     cursor = conn.cursor()
@@ -147,14 +152,20 @@ def login():
 @app.route('/callback')
 def callback():
     """Handle OAuth2 callback"""
+    print(f"DEBUG: Callback received - URL: {request.url}")
+    print(f"DEBUG: Session state: {session.get('state')}")
+    print(f"DEBUG: Request args: {request.args}")
+    
     state = session.get('state')
     
     if not state:
+        print("DEBUG: No state found in session")
         flash('Authentication failed: No state found in session. Please try again.', 'error')
         return redirect(url_for('index'))
     
     # Check if we have the authorization code
     if 'code' not in request.args:
+        print("DEBUG: No authorization code received")
         flash('Authentication failed: No authorization code received.', 'error')
         return redirect(url_for('index'))
     
@@ -181,12 +192,15 @@ def callback():
         session['credentials'] = credentials_to_dict(credentials)
         session.permanent = True
         
+        print(f"DEBUG: Credentials saved to session: {bool(session.get('credentials'))}")
+        print(f"DEBUG: Session ID: {session.get('_id', 'No ID')}")
+        
         flash('Successfully logged in!', 'success')
         return redirect(url_for('index'))
         
     except Exception as e:
+        print(f"DEBUG: OAuth Error: {str(e)}")
         flash(f'Authentication failed: {str(e)}', 'error')
-        print(f"OAuth Error: {str(e)}")  # For debugging
         print(f"Request URL: {request.url}")
         print(f"Redirect URI: {REDIRECT_URI}")
         return redirect(url_for('index'))
