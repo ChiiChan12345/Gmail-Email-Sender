@@ -136,10 +136,12 @@ def login():
     
     authorization_url, state = flow.authorization_url(
         access_type='offline',
-        include_granted_scopes='true'
+        include_granted_scopes='true',
+        prompt='select_account'
     )
     
     session['state'] = state
+    session.permanent = True
     return redirect(authorization_url)
 
 @app.route('/callback')
@@ -147,29 +149,39 @@ def callback():
     """Handle OAuth2 callback"""
     state = session.get('state')
     
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [REDIRECT_URI]
-            }
-        },
-        scopes=SCOPES,
-        state=state
-    )
-    flow.redirect_uri = REDIRECT_URI
+    if not state:
+        flash('Authentication failed. Please try again.', 'error')
+        return redirect(url_for('index'))
     
-    authorization_response = request.url
-    flow.fetch_token(authorization_response=authorization_response)
-    
-    credentials = flow.credentials
-    session['credentials'] = credentials_to_dict(credentials)
-    
-    flash('Successfully logged in!', 'success')
-    return redirect(url_for('index'))
+    try:
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [REDIRECT_URI]
+                }
+            },
+            scopes=SCOPES,
+            state=state
+        )
+        flow.redirect_uri = REDIRECT_URI
+        
+        authorization_response = request.url
+        flow.fetch_token(authorization_response=authorization_response)
+        
+        credentials = flow.credentials
+        session['credentials'] = credentials_to_dict(credentials)
+        session.permanent = True
+        
+        flash('Successfully logged in!', 'success')
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        flash(f'Authentication failed: {str(e)}', 'error')
+        return redirect(url_for('index'))
 
 @app.route('/logout')
 def logout():
@@ -234,7 +246,7 @@ def upload_recipients():
         flash('No file selected!', 'error')
         return redirect(url_for('recipients'))
     
-    if file and file.filename.endswith('.csv'):
+    if file and file.filename and file.filename.endswith('.csv'):
         stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
         csv_input = csv.DictReader(stream)
         
