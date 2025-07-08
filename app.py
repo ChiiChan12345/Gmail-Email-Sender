@@ -17,6 +17,11 @@ from email import encoders
 import csv
 import io
 
+# Force HTTPS for OAuth2 on Railway
+if 'railway.app' in os.environ.get('REDIRECT_URI', ''):
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Allow OAuth over HTTP proxy
+    os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'   # Relax token scope validation
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-here')  # Use environment variable
 
@@ -139,6 +144,10 @@ def index():
 @app.route('/login')
 def login():
     """Start OAuth2 login process"""
+    # Force HTTPS for Railway deployments
+    if 'railway.app' in request.host:
+        request.environ['wsgi.url_scheme'] = 'https'
+    
     flow = Flow.from_client_config(
         {
             "web": {
@@ -153,11 +162,18 @@ def login():
     )
     flow.redirect_uri = REDIRECT_URI
     
+    print(f"DEBUG: Login - Redirect URI: {flow.redirect_uri}")
+    print(f"DEBUG: Login - Request scheme: {request.scheme}")
+    print(f"DEBUG: Login - Request host: {request.host}")
+    
     authorization_url, state = flow.authorization_url(
         access_type='offline',
         include_granted_scopes='true',
         prompt='select_account'
     )
+    
+    print(f"DEBUG: Login - Authorization URL: {authorization_url}")
+    print(f"DEBUG: Login - State: {state}")
     
     session['state'] = state
     session.permanent = True
@@ -166,7 +182,13 @@ def login():
 @app.route('/callback')
 def callback():
     """Handle OAuth2 callback"""
+    # Force HTTPS for the current request URL on Railway
+    if 'railway.app' in request.host:
+        request.environ['wsgi.url_scheme'] = 'https'
+    
     print(f"DEBUG: Callback received - URL: {request.url}")
+    print(f"DEBUG: Host: {request.host}")
+    print(f"DEBUG: Scheme: {request.scheme}")
     print(f"DEBUG: Session state: {session.get('state')}")
     print(f"DEBUG: Request args: {request.args}")
     
@@ -199,8 +221,10 @@ def callback():
         )
         flow.redirect_uri = REDIRECT_URI
         
-        authorization_response = request.url
-        flow.fetch_token(authorization_response=authorization_response)
+        print(f"DEBUG: Using redirect URI: {flow.redirect_uri}")
+        
+        # Fetch the token
+        flow.fetch_token(authorization_response=request.url.replace('http://', 'https://'))
         
         credentials = flow.credentials
         session['credentials'] = credentials_to_dict(credentials)
@@ -219,9 +243,9 @@ def callback():
         
     except Exception as e:
         print(f"DEBUG: OAuth Error: {str(e)}")
-        flash(f'Authentication failed: {str(e)}', 'error')
         print(f"Request URL: {request.url}")
         print(f"Redirect URI: {REDIRECT_URI}")
+        flash(f'Authentication failed: {str(e)}', 'error')
         return redirect(url_for('index'))
 
 @app.route('/logout')
