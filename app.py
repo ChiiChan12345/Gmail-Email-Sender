@@ -20,6 +20,20 @@ import io
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-here')  # Use environment variable
 
+# Session configuration for Railway HTTPS deployment
+if 'localhost' not in os.environ.get('REDIRECT_URI', ''):
+    # Production settings (Railway)
+    app.config['SESSION_COOKIE_SECURE'] = True  # Require HTTPS for cookies
+    app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS attacks
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Allow OAuth redirects
+else:
+    # Development settings (localhost)
+    app.config['SESSION_COOKIE_SECURE'] = False  # Allow HTTP for local development
+    app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS attacks
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Allow OAuth redirects
+
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)  # Session expires in 24 hours
+
 # ===== PERSONALIZE THESE SETTINGS =====
 # OAuth2 settings - You'll need to set these up in Google Console
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', 'your-google-client-id')
@@ -194,6 +208,11 @@ def callback():
         
         print(f"DEBUG: Credentials saved to session: {bool(session.get('credentials'))}")
         print(f"DEBUG: Session ID: {session.get('_id', 'No ID')}")
+        print(f"DEBUG: Credentials dict: {session.get('credentials', {}).keys()}")
+        
+        # Test session persistence immediately
+        test_session = session.get('credentials')
+        print(f"DEBUG: Can retrieve credentials immediately: {bool(test_session)}")
         
         flash('Successfully logged in!', 'success')
         return redirect(url_for('index'))
@@ -447,6 +466,13 @@ if __name__ == '__main__':
     print(f"🌐 Privacy Policy: {REDIRECT_URI.replace('/callback', '/privacy')}")
     print(f"🌐 Terms of Service: {REDIRECT_URI.replace('/callback', '/terms')}")
     print(f"🌐 Server will run on port: {os.environ.get('PORT', 5000)}")
+    
+    # Debug session configuration
+    print(f"\n🔧 SESSION CONFIGURATION:")
+    print(f"SECRET_KEY: {'SET' if os.environ.get('SECRET_KEY') else 'NOT SET'}")
+    print(f"SESSION_COOKIE_SECURE: {app.config.get('SESSION_COOKIE_SECURE')}")
+    print(f"SESSION_COOKIE_HTTPONLY: {app.config.get('SESSION_COOKIE_HTTPONLY')}")
+    print(f"SESSION_COOKIE_SAMESITE: {app.config.get('SESSION_COOKIE_SAMESITE')}")
     
     # Railway automatically provides PORT environment variable
     port = int(os.environ.get('PORT', 5000))
