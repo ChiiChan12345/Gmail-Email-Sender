@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Compose Email - Gmail Emailer{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+        <i class="fas fa-edit me-2"></i>
+        Compose Email
+    </h1>
+    <a href="{{ url_for('recipients') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-users me-2"></i>
+        Manage Recipients
+    </a>
+</div>
+
+<form method="POST" action="{{ url_for('send_email') }}">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="subject" class="form-label">Subject</label>
+                        <input type="text" class="form-control" id="subject" name="subject" 
+                               placeholder="Enter email subject (you can use {name} for personalization)" required>
+                        <div class="form-text">
+                            Use {name} to personalize with recipient names
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="body" class="form-label">Message</label>
+                        <textarea class="form-control" id="body" name="body" rows="12" 
+                                  placeholder="Write your email message here..." required></textarea>
+                        <div class="form-text">
+                            Available variables: {name} for recipient name
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Send to:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="send_to" id="send_all" value="all" checked>
+                            <label class="form-check-label" for="send_all">
+                                All recipients
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="send_to" id="send_selected" value="selected">
+                            <label class="form-check-label" for="send_selected">
+                                Selected recipients
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="recipient-selection" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label">Select Recipients:</label>
+                            <div class="border p-3 rounded" style="max-height: 200px; overflow-y: auto;">
+                                <!-- Recipients will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-outline-secondary me-md-2" onclick="showPreview()">
+                            <i class="fas fa-eye me-2"></i>
+                            Preview
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane me-2"></i>
+                            Send Email
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Email Tips
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6>Personalization</h6>
+                        <p class="small text-muted">Use {name} in your subject and message to automatically insert recipient names.</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6>Spam Prevention</h6>
+                        <p class="small text-muted">
+                            • 30-60 second delays between emails<br>
+                            • Maximum 50 emails per hour<br>
+                            • Maximum 500 emails per day
+                        </p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6>Best Practices</h6>
+                        <ul class="small text-muted">
+                            <li>Keep subject lines concise</li>
+                            <li>Personalize your message</li>
+                            <li>Include clear call-to-action</li>
+                            <li>Test with yourself first</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-template me-2"></i>
+                        Quick Templates
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="insertTemplate('greeting')">
+                            Greeting Template
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="insertTemplate('business')">
+                            Business Template
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="insertTemplate('followup')">
+                            Follow-up Template
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye me-2"></i>
+                    Email Preview
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <strong>Subject:</strong>
+                    <div id="preview-subject" class="border p-2 rounded bg-light"></div>
+                </div>
+                <div class="mb-3">
+                    <strong>Message:</strong>
+                    <div id="preview-body" class="border p-3 rounded bg-light" style="white-space: pre-wrap;"></div>
+                </div>
+                <div class="text-muted small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    This preview shows how the email will look with sample personalization
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Template data
+const templates = {
+    greeting: {
+        subject: "Hello {name}!",
+        body: `Hi {name},
+
+I hope this email finds you well.
+
+Best regards,
+[Your Name]`
+    },
+    business: {
+        subject: "Business Opportunity - {name}",
+        body: `Dear {name},
+
+I wanted to reach out to discuss a potential business opportunity that might interest you.
+
+Looking forward to connecting with you.
+
+Best regards,
+[Your Name]`
+    },
+    followup: {
+        subject: "Following up - {name}",
+        body: `Hi {name},
+
+I wanted to follow up on our previous conversation.
+
+Please let me know if you have any questions.
+
+Best regards,
+[Your Name]`
+    }
+};
+
+// Toggle recipient selection
+document.addEventListener('DOMContentLoaded', function() {
+    const sendAllRadio = document.getElementById('send_all');
+    const sendSelectedRadio = document.getElementById('send_selected');
+    const recipientSelection = document.getElementById('recipient-selection');
+    
+    sendAllRadio.addEventListener('change', function() {
+        if (this.checked) {
+            recipientSelection.style.display = 'none';
+        }
+    });
+    
+    sendSelectedRadio.addEventListener('change', function() {
+        if (this.checked) {
+            recipientSelection.style.display = 'block';
+            loadRecipients();
+        }
+    });
+});
+
+// Load recipients for selection
+function loadRecipients() {
+    // This would typically fetch recipients from the server
+    // For now, we'll show a placeholder
+    const container = document.querySelector('#recipient-selection .border');
+    container.innerHTML = '<div class="text-muted">Loading recipients...</div>';
+}
+
+// Insert template
+function insertTemplate(templateName) {
+    const template = templates[templateName];
+    if (template) {
+        document.getElementById('subject').value = template.subject;
+        document.getElementById('body').value = template.body;
+    }
+}
+
+// Show preview
+function showPreview() {
+    const subject = document.getElementById('subject').value;
+    const body = document.getElementById('body').value;
+    
+    // Replace {name} with sample name for preview
+    const sampleName = 'John Doe';
+    const previewSubject = subject.replace(/{name}/g, sampleName);
+    const previewBody = body.replace(/{name}/g, sampleName);
+    
+    document.getElementById('preview-subject').textContent = previewSubject;
+    document.getElementById('preview-body').textContent = previewBody;
+    
+    const modal = new bootstrap.Modal(document.getElementById('previewModal'));
+    modal.show();
+}
+</script>
+{% endblock %} 

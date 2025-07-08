@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Gmail Emailer{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+        <i class="fas fa-dashboard me-2"></i>
+        Dashboard
+    </h1>
+    <a href="{{ url_for('compose') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>
+        New Email
+    </a>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <div class="stats-number">{{ today_count }}</div>
+                <div class="h6 mb-0">Emails Today</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <div class="stats-number">{{ total_recipients }}</div>
+                <div class="h6 mb-0">Total Recipients</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <div class="stats-number">{{ campaigns|length }}</div>
+                <div class="h6 mb-0">Recent Campaigns</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-rocket me-2"></i>
+                    Quick Actions
+                </h5>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('compose') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-edit me-2"></i>
+                        Compose Email
+                    </a>
+                    <a href="{{ url_for('recipients') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-users me-2"></i>
+                        Manage Recipients
+                    </a>
+                    <a href="{{ url_for('campaigns') }}" class="btn btn-outline-info">
+                        <i class="fas fa-paper-plane me-2"></i>
+                        View Campaigns
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-shield-alt me-2"></i>
+                    Spam Prevention
+                </h5>
+                <div class="small text-muted">
+                    <div class="mb-2">
+                        <i class="fas fa-clock me-1"></i>
+                        Delay: 30-60 seconds between emails
+                    </div>
+                    <div class="mb-2">
+                        <i class="fas fa-hourglass-half me-1"></i>
+                        Hourly limit: 50 emails
+                    </div>
+                    <div class="mb-2">
+                        <i class="fas fa-calendar-day me-1"></i>
+                        Daily limit: 500 emails
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <div class="progress mb-2">
+                        <div class="progress-bar" role="progressbar" style="width: {{ (today_count / 500) * 100 }}%"></div>
+                    </div>
+                    <small class="text-muted">{{ today_count }}/500 emails sent today</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Campaigns -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-history me-2"></i>
+            Recent Campaigns
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if campaigns %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Campaign Name</th>
+                            <th>Subject</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for campaign in campaigns %}
+                        <tr>
+                            <td>{{ campaign.name }}</td>
+                            <td>{{ campaign.subject }}</td>
+                            <td>{{ campaign.created_at }}</td>
+                            <td>
+                                <a href="{{ url_for('campaigns') }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye me-1"></i>
+                                    View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-4">
+                <i class="fas fa-paper-plane text-muted" style="font-size: 3rem;"></i>
+                <h5 class="mt-3 text-muted">No campaigns yet</h5>
+                <p class="text-muted">Start by composing your first email!</p>
+                <a href="{{ url_for('compose') }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>
+                    Create First Campaign
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Help Section -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">
+            <i class="fas fa-question-circle me-2"></i>
+            Getting Started
+        </h5>
+        <div class="row">
+            <div class="col-md-4">
+                <h6>1. Add Recipients</h6>
+                <p class="small text-muted">Upload a CSV file or manually add recipients to your contact list.</p>
+            </div>
+            <div class="col-md-4">
+                <h6>2. Compose Email</h6>
+                <p class="small text-muted">Write your email with personalization variables like {name}.</p>
+            </div>
+            <div class="col-md-4">
+                <h6>3. Send & Track</h6>
+                <p class="small text-muted">Send your campaign and track the results in real-time.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

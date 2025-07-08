@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Gmail Emailer{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-4">
+        <div class="card">
+            <div class="card-body text-center p-5">
+                <div class="mb-4">
+                    <i class="fas fa-envelope text-primary" style="font-size: 4rem;"></i>
+                </div>
+                <h2 class="card-title mb-4">Gmail Emailer</h2>
+                <p class="text-muted mb-4">
+                    Send personalized emails with anti-spam protection using your Gmail account.
+                </p>
+                <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg w-100">
+                    <i class="fab fa-google me-2"></i>
+                    Sign in with Google
+                </a>
+                <div class="mt-4">
+                    <small class="text-muted">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Secure OAuth2 authentication - no passwords needed!
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="fas fa-star text-warning me-2"></i>
+                    Features
+                </h5>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        No app passwords required
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        Built-in spam prevention
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        Bulk email support
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        Personalized templates
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        Campaign tracking
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
