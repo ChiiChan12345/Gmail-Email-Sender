@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy Policy - Gmail Emailer{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <h1 class="display-4 mb-4">Privacy Policy</h1>
+            <p class="lead">Last updated: {{ current_date }}</p>
+            
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                This Privacy Policy explains how Gmail Emailer collects, uses, and protects your information when you use our email automation service.
+            </div>
+
+            <h2 class="h3 mt-5">1. Information We Collect</h2>
+            
+            <h3 class="h4 mt-4">1.1 Information You Provide</h3>
+            <ul>
+                <li><strong>Google Account Information:</strong> When you sign in with Google OAuth2, we receive your name, email address, and profile picture.</li>
+                <li><strong>Email Recipients:</strong> Names and email addresses you add to your recipient lists.</li>
+                <li><strong>Email Content:</strong> The subject lines and body content of emails you compose and send.</li>
+                <li><strong>Campaign Data:</strong> Information about your email campaigns, including send times and recipient lists.</li>
+            </ul>
+
+            <h3 class="h4 mt-4">1.2 Information We Automatically Collect</h3>
+            <ul>
+                <li><strong>Usage Data:</strong> Information about how you use our service, including login times and features accessed.</li>
+                <li><strong>Technical Data:</strong> IP address, browser type, and device information for security and performance purposes.</li>
+                <li><strong>Gmail API Data:</strong> We access your Gmail account only to send emails on your behalf through the Gmail API.</li>
+            </ul>
+
+            <h2 class="h3 mt-5">2. How We Use Your Information</h2>
+            
+            <h3 class="h4 mt-4">2.1 Primary Uses</h3>
+            <ul>
+                <li><strong>Email Sending:</strong> To send emails through your Gmail account as requested.</li>
+                <li><strong>Service Provision:</strong> To provide, maintain, and improve our email automation service.</li>
+                <li><strong>User Support:</strong> To respond to your questions and provide customer support.</li>
+                <li><strong>Security:</strong> To protect against fraud, abuse, and security threats.</li>
+            </ul>
+
+            <h3 class="h4 mt-4">2.2 Gmail API Usage</h3>
+            <div class="alert alert-warning">
+                <i class="fas fa-shield-alt me-2"></i>
+                <strong>Important:</strong> We only use the Gmail API to send emails on your behalf. We do not read, store, or analyze your existing emails.
+            </div>
+            <ul>
+                <li>We access your Gmail account only when you initiate an email send action.</li>
+                <li>We do not store your Gmail messages or email content permanently.</li>
+                <li>We comply with all Gmail API Developer Policy requirements.</li>
+                <li>We use the minimum necessary permissions (gmail.send scope only).</li>
+            </ul>
+
+            <h2 class="h3 mt-5">3. Data Storage and Security</h2>
+            
+            <h3 class="h4 mt-4">3.1 Data Storage</h3>
+            <ul>
+                <li><strong>Local Database:</strong> Recipient lists and campaign data are stored in a secure database.</li>
+                <li><strong>OAuth2 Tokens:</strong> Your Gmail access tokens are stored securely and encrypted.</li>
+                <li><strong>No Password Storage:</strong> We never store your Gmail password or any passwords.</li>
+                <li><strong>Data Retention:</strong> We retain your data only as long as your account is active.</li>
+            </ul>
+
+            <h3 class="h4 mt-4">3.2 Security Measures</h3>
+            <ul>
+                <li>All data transmission is encrypted using HTTPS/TLS.</li>
+                <li>OAuth2 authentication prevents unauthorized access to your Gmail account.</li>
+                <li>Regular security updates and monitoring for vulnerabilities.</li>
+                <li>Access controls and logging to track data access.</li>
+            </ul>
+
+            <h2 class="h3 mt-5">4. Data Sharing and Disclosure</h2>
+            
+            <h3 class="h4 mt-4">4.1 We Do Not Share Your Data</h3>
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>No Data Sharing:</strong> We do not sell, rent, or share your personal information with third parties for marketing purposes.
+            </div>
+
+            <h3 class="h4 mt-4">4.2 Limited Disclosure</h3>
+            <p>We may disclose your information only in the following circumstances:</p>
+            <ul>
+                <li><strong>Legal Requirements:</strong> When required by law, court order, or legal process.</li>
+                <li><strong>Security Threats:</strong> To protect against fraud, abuse, or security threats.</li>
+                <li><strong>Service Providers:</strong> To trusted service providers who assist in operating our service (under strict confidentiality agreements).</li>
+            </ul>
+
+            <h2 class="h3 mt-5">5. Your Rights and Choices</h2>
+            
+            <h3 class="h4 mt-4">5.1 Access and Control</h3>
+            <ul>
+                <li><strong>Account Access:</strong> You can access and modify your recipient lists and campaign data anytime.</li>
+                <li><strong>Data Export:</strong> You can export your recipient lists and campaign data.</li>
+                <li><strong>Account Deletion:</strong> You can delete your account and all associated data.</li>
+                <li><strong>OAuth2 Revocation:</strong> You can revoke Gmail access through your Google Account settings.</li>
+            </ul>
+
+            <h3 class="h4 mt-4">5.2 Gmail API Permissions</h3>
+            <p>You can manage Gmail API permissions by:</p>
+            <ul>
+                <li>Visiting your <a href="https://myaccount.google.com/permissions" target="_blank">Google Account permissions page</a></li>
+                <li>Finding "Gmail Emailer" in your connected apps</li>
+                <li>Clicking "Remove Access" to revoke permissions</li>
+            </ul>
+
+            <h2 class="h3 mt-5">6. Cookies and Tracking</h2>
+            
+            <h3 class="h4 mt-4">6.1 Essential Cookies</h3>
+            <ul>
+                <li><strong>Session Cookies:</strong> To keep you logged in and maintain your session.</li>
+                <li><strong>Security Cookies:</strong> To protect against CSRF attacks and ensure secure authentication.</li>
+            </ul>
+
+            <h3 class="h4 mt-4">6.2 No Tracking</h3>
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                We do not use advertising cookies, tracking pixels, or analytics tools that track your behavior across websites.
+            </div>
+
+            <h2 class="h3 mt-5">7. Children's Privacy</h2>
+            <p>Our service is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us.</p>
+
+            <h2 class="h3 mt-5">8. International Data Transfers</h2>
+            <p>Your information may be transferred to and processed in countries other than your own. We ensure appropriate safeguards are in place to protect your information in accordance with this privacy policy.</p>
+
+            <h2 class="h3 mt-5">9. Changes to This Privacy Policy</h2>
+            <p>We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the new Privacy Policy on this page and updating the "Last updated" date.</p>
+
+            <h2 class="h3 mt-5">10. Contact Information</h2>
+            <p>If you have any questions about this Privacy Policy or our privacy practices, please contact us:</p>
+            <ul>
+                <li><strong>Email:</strong> privacy@gmail-emailer.com</li>
+                <li><strong>Subject:</strong> Privacy Policy Inquiry</li>
+            </ul>
+
+            <div class="alert alert-primary mt-5">
+                <h4><i class="fas fa-shield-alt me-2"></i>Google API Services User Data Policy Compliance</h4>
+                <p class="mb-0">Gmail Emailer's use and transfer of information received from Google APIs to any other app will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+            </div>
+
+            <div class="text-center mt-5">
+                <a href="/" class="btn btn-primary">Back to Home</a>
+                <a href="/terms" class="btn btn-outline-primary">Terms of Service</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -18,7 +18,7 @@ import csv
 import io
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this to a secure secret key
+app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-here')  # Use environment variable
 
 # ===== PERSONALIZE THESE SETTINGS =====
 # OAuth2 settings - You'll need to set these up in Google Console
@@ -87,11 +87,11 @@ def get_db():
 
 @app.route('/')
 def index():
-    """Main dashboard"""
+    """Main homepage - shows landing page for non-authenticated users, dashboard for authenticated users"""
     if 'credentials' not in session:
-        return render_template('login.html')
+        return render_template('index.html')
     
-    # Get statistics
+    # Get statistics for authenticated users
     conn = get_db()
     cursor = conn.cursor()
     
@@ -396,6 +396,16 @@ def campaigns():
     conn.close()
     
     return render_template('campaigns.html', campaigns=campaigns)
+
+@app.route('/privacy')
+def privacy():
+    """Privacy Policy page"""
+    return render_template('privacy.html', current_date=datetime.now().strftime('%B %d, %Y'))
+
+@app.route('/terms')
+def terms():
+    """Terms of Service page"""
+    return render_template('terms.html', current_date=datetime.now().strftime('%B %d, %Y'))
 
 if __name__ == '__main__':
     init_db()
