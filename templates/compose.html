@@ -58,17 +58,15 @@
                         
                         <div id="recipient-selection" style="display: none;" class="mt-3">
                             <div class="border rounded p-3 bg-light">
-                                Select recipients above to load the list
+                                <div id="recipient-list">
+                                    Loading recipients...
+                                </div>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <button type="button" class="btn btn-outline-secondary me-md-2" onclick="showPreview()">
-                            <i class="fas fa-eye me-2"></i>
-                            Preview
-                        </button>
-                        <button type="submit" class="btn btn-primary">
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
                             <i class="fas fa-paper-plane me-2"></i>
                             Send Email
                         </button>
@@ -78,207 +76,162 @@
         </div>
         
         <div class="col-md-4">
-            <div class="card">
+            <!-- Quick Templates -->
+            <div class="card mb-3">
                 <div class="card-header">
-                    <h5 class="mb-0">
+                    <h6 class="mb-0">
                         <i class="fas fa-magic me-2"></i>
-                        Personalization Variables
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <h6>Contact Information</h6>
-                        <div class="small text-muted mb-2">
-                            <code>{name}</code> - Full name<br>
-                            <code>{first_name}</code> - First name only<br>
-                            <code>{last_name}</code> - Last name only<br>
-                            <code>{email}</code> - Email address<br>
-                            <code>{company}</code> - Company name<br>
-                            <code>{position}</code> - Job position<br>
-                            <code>{phone}</code> - Phone number
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <h6>Date & Time</h6>
-                        <div class="small text-muted mb-2">
-                            <code>{date}</code> - Current date<br>
-                            <code>{time}</code> - Current time<br>
-                            <code>{day}</code> - Day of week<br>
-                            <code>{month}</code> - Month name<br>
-                            <code>{year}</code> - Current year
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <h6>Example Usage</h6>
-                        <div class="small text-muted">
-                            <em>Subject:</em> "Hello {first_name}!"<br>
-                            <em>Message:</em> "Dear {name}, I hope this finds you well at {company}..."
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="card mt-3">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-shield-alt me-2"></i>
-                        Spam Prevention
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="small text-muted">
-                        <div class="mb-2">
-                            <i class="fas fa-clock me-1"></i>
-                            Delay: 30-60 seconds between emails
-                        </div>
-                        <div class="mb-2">
-                            <i class="fas fa-hourglass-half me-1"></i>
-                            Hourly limit: 50 emails
-                        </div>
-                        <div class="mb-2">
-                            <i class="fas fa-calendar-day me-1"></i>
-                            Daily limit: 500 emails
-                        </div>
-                        <div class="mb-2">
-                            <i class="fas fa-random me-1"></i>
-                            Random intervals for natural sending
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="card mt-3">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-template me-2"></i>
                         Quick Templates
-                    </h5>
+                    </h6>
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="insertTemplate('greeting')">
-                            Greeting Template
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadTemplate('greeting')">
+                            <i class="fas fa-hand-wave me-1"></i>
+                            Greeting
                         </button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="insertTemplate('business')">
-                            Business Template
+                        <button type="button" class="btn btn-outline-info btn-sm" onclick="loadTemplate('business')">
+                            <i class="fas fa-briefcase me-1"></i>
+                            Business Outreach
                         </button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="insertTemplate('followup')">
-                            Follow-up Template
+                        <button type="button" class="btn btn-outline-success btn-sm" onclick="loadTemplate('followup')">
+                            <i class="fas fa-reply me-1"></i>
+                            Follow-up
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" onclick="loadTemplate('newsletter')">
+                            <i class="fas fa-newspaper me-1"></i>
+                            Newsletter
                         </button>
                     </div>
+                </div>
+            </div>
+            
+            <!-- Personalization Variables -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button" 
+                            data-bs-toggle="collapse" data-bs-target="#personalizationVars">
+                        <h6 class="mb-0">
+                            <i class="fas fa-user-tag me-2"></i>
+                            Personalization Variables
+                            <i class="fas fa-chevron-down float-end mt-1"></i>
+                        </h6>
+                    </button>
+                </div>
+                <div class="collapse" id="personalizationVars">
+                    <div class="card-body">
+                        <div class="small">
+                            <h6>Contact Information:</h6>
+                            <div class="mb-2">
+                                <code>{name}</code> - Full name<br>
+                                <code>{first_name}</code> - First name<br>
+                                <code>{last_name}</code> - Last name<br>
+                                <code>{email}</code> - Email address<br>
+                                <code>{company}</code> - Company name<br>
+                                <code>{position}</code> - Job position<br>
+                                <code>{phone}</code> - Phone number
+                            </div>
+                            
+                            <h6>Date & Time:</h6>
+                            <div>
+                                <code>{date}</code> - Current date<br>
+                                <code>{time}</code> - Current time<br>
+                                <code>{day}</code> - Day of week<br>
+                                <code>{month}</code> - Current month<br>
+                                <code>{year}</code> - Current year
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Email Tips -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        Email Tips
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled small">
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Use personalization variables to make emails more engaging
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Keep subject lines under 50 characters
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Preview your email before sending
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Anti-spam delays: 30-60 seconds between emails
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Limit: 50 emails per hour
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
     </div>
 </form>
-
-<!-- Preview Modal -->
-<div class="modal fade" id="previewModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-eye me-2"></i>
-                    Email Preview
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <strong>Subject:</strong>
-                    <div id="preview-subject" class="border p-2 rounded bg-light"></div>
-                </div>
-                <div class="mb-3">
-                    <strong>Message:</strong>
-                    <div id="preview-body" class="border p-3 rounded bg-light"></div>
-                </div>
-                <div class="text-muted small">
-                    <i class="fas fa-info-circle me-1"></i>
-                    This preview shows how the email will look with sample personalization
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Initialize TinyMCE Rich Text Editor
+// Initialize TinyMCE
 tinymce.init({
     selector: '#body',
-    height: 400,
+    height: 300,
     menubar: false,
     plugins: [
-        'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-        'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-        'insertdatetime', 'media', 'table', 'help', 'wordcount'
+        'advlist autolink lists link image charmap print preview anchor',
+        'searchreplace visualblocks code fullscreen',
+        'insertdatetime media table paste code help wordcount'
     ],
-    toolbar: 'undo redo | blocks | ' +
-        'bold italic forecolor | alignleft aligncenter ' +
-        'alignright alignjustify | bullist numlist outdent indent | ' +
-        'removeformat | help',
-    content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
-    setup: function (editor) {
-        editor.on('change', function () {
-            editor.save();
-        });
-    }
+    toolbar: 'undo redo | formatselect | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link | code',
+    content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px }'
 });
 
-// Enhanced template data with new personalization variables
+// Quick Templates
 const templates = {
     greeting: {
-        subject: "Hello {first_name}!",
-        body: `<p>Hi {name},</p>
-
-<p>I hope this email finds you well at {company}.</p>
-
-<p>Best regards,<br>
-[Your Name]</p>`
+        subject: "Hello {name}!",
+        body: "Hi {name},\n\nI hope this email finds you well. I wanted to reach out and connect with you.\n\nBest regards,\n[Your Name]"
     },
     business: {
-        subject: "Business Opportunity - {name}",
-        body: `<p>Dear {name},</p>
-
-<p>I wanted to reach out to discuss a potential business opportunity that might interest you and {company}.</p>
-
-<p>As someone in the {position} role, I believe this could be particularly valuable for your organization.</p>
-
-<p>Looking forward to connecting with you.</p>
-
-<p>Best regards,<br>
-[Your Name]</p>`
+        subject: "Business Opportunity - {company}",
+        body: "Dear {name},\n\nI hope you're doing well at {company}. I have an exciting business opportunity that might interest you.\n\nAs a {position}, you might find this relevant to your work. I'd love to discuss this further with you.\n\nBest regards,\n[Your Name]"
     },
     followup: {
-        subject: "Following up - {first_name}",
-        body: `<p>Hi {name},</p>
-
-<p>I wanted to follow up on our previous conversation regarding {company}.</p>
-
-<p>Please let me know if you have any questions or if there's a good time to discuss this further.</p>
-
-<p>Best regards,<br>
-[Your Name]</p>`
+        subject: "Following up on our conversation",
+        body: "Hi {name},\n\nI wanted to follow up on our recent conversation. Thank you for taking the time to speak with me.\n\nAs promised, I'm reaching out to continue our discussion.\n\nLooking forward to hearing from you.\n\nBest regards,\n[Your Name]"
+    },
+    newsletter: {
+        subject: "Monthly Newsletter - {month} {year}",
+        body: "Hello {name},\n\nWelcome to our {month} newsletter! Here's what's new this month:\n\n• [Update 1]\n• [Update 2]\n• [Update 3]\n\nThank you for being part of our community.\n\nBest regards,\n[Your Name]"
     }
 };
 
-// Toggle recipient selection
+function loadTemplate(templateName) {
+    const template = templates[templateName];
+    if (template) {
+        document.getElementById('subject').value = template.subject;
+        tinymce.get('body').setContent(template.body.replace(/\n/g, '<br>'));
+    }
+}
+
+// Recipient Selection
 document.addEventListener('DOMContentLoaded', function() {
     const sendAllRadio = document.getElementById('send_all');
     const sendSelectedRadio = document.getElementById('send_selected');
     const recipientSelection = document.getElementById('recipient-selection');
-    
-    sendAllRadio.addEventListener('change', function() {
-        if (this.checked) {
-            recipientSelection.style.display = 'none';
-        }
-    });
     
     sendSelectedRadio.addEventListener('change', function() {
         if (this.checked) {
@@ -286,138 +239,63 @@ document.addEventListener('DOMContentLoaded', function() {
             loadRecipients();
         }
     });
+    
+    sendAllRadio.addEventListener('change', function() {
+        if (this.checked) {
+            recipientSelection.style.display = 'none';
+        }
+    });
 });
 
-// Load recipients for selection
 function loadRecipients() {
-    const container = document.querySelector('#recipient-selection .border');
-    container.innerHTML = '<div class="text-muted">Loading recipients...</div>';
+    const recipientList = document.getElementById('recipient-list');
+    recipientList.innerHTML = 'Loading recipients...';
     
     fetch('/api/recipients')
         .then(response => response.json())
         .then(recipients => {
             if (recipients.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center py-3">
-                        <i class="fas fa-users text-muted mb-2" style="font-size: 2rem;"></i>
-                        <p class="text-muted mb-2">No recipients found</p>
-                        <a href="{{ url_for('recipients') }}" class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-plus me-1"></i>
-                            Add Recipients
-                        </a>
-                    </div>
-                `;
+                recipientList.innerHTML = '<p class="text-muted">No recipients found. <a href="/recipients/add">Add some recipients</a> first.</p>';
                 return;
             }
             
-            let html = '<div class="mb-2"><strong>Select Recipients:</strong></div>';
-            html += '<div style="max-height: 200px; overflow-y: auto;">';
+            let html = '<div class="form-group">';
+            html += '<div class="mb-2"><small class="text-muted">Select recipients to send to:</small></div>';
             
             recipients.forEach(recipient => {
                 html += `
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="recipient_ids" 
-                               value="${recipient.id}" id="recipient_${recipient.id}">
-                        <label class="form-check-label" for="recipient_${recipient.id}">
-                            <strong>${recipient.name}</strong>
-                            ${recipient.company ? `<span class="badge bg-secondary ms-1">${recipient.company}</span>` : ''}
-                            <br>
-                            <small class="text-muted">${recipient.email}</small>
-                            ${recipient.position ? `<br><small class="text-muted">${recipient.position}</small>` : ''}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="recipient_ids" value="${recipient.id}" id="recipient_${recipient.id}">
+                        <label class="form-check-label small" for="recipient_${recipient.id}">
+                            <strong>${recipient.name}</strong><br>
+                            <span class="text-muted">${recipient.email}</span>
                         </label>
                     </div>
                 `;
             });
             
             html += '</div>';
-            html += `
-                <div class="mt-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="selectAllRecipients()">
-                        Select All
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectNoneRecipients()">
-                        Select None
-                    </button>
-                </div>
-            `;
+            html += '<div class="mt-2">';
+            html += '<button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="selectAllRecipients()">Select All</button>';
+            html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllRecipients()">Deselect All</button>';
+            html += '</div>';
             
-            container.innerHTML = html;
+            recipientList.innerHTML = html;
         })
         .catch(error => {
             console.error('Error loading recipients:', error);
-            container.innerHTML = '<div class="text-danger">Error loading recipients. Please try again.</div>';
+            recipientList.innerHTML = '<p class="text-danger">Error loading recipients. Please refresh the page.</p>';
         });
 }
 
-// Select all recipients
 function selectAllRecipients() {
     const checkboxes = document.querySelectorAll('input[name="recipient_ids"]');
     checkboxes.forEach(checkbox => checkbox.checked = true);
 }
 
-// Select no recipients
-function selectNoneRecipients() {
+function deselectAllRecipients() {
     const checkboxes = document.querySelectorAll('input[name="recipient_ids"]');
     checkboxes.forEach(checkbox => checkbox.checked = false);
-}
-
-// Insert template
-function insertTemplate(templateName) {
-    const template = templates[templateName];
-    if (template) {
-        document.getElementById('subject').value = template.subject;
-        
-        // Set TinyMCE content
-        if (tinymce.get('body')) {
-            tinymce.get('body').setContent(template.body);
-        } else {
-            document.getElementById('body').value = template.body;
-        }
-    }
-}
-
-// Enhanced preview with personalization variables
-function showPreview() {
-    const subject = document.getElementById('subject').value;
-    let body = '';
-    
-    // Get content from TinyMCE or fallback to textarea
-    if (tinymce.get('body')) {
-        body = tinymce.get('body').getContent();
-    } else {
-        body = document.getElementById('body').value;
-    }
-    
-    // Sample data for preview
-    const sampleData = {
-        '{name}': 'John Doe',
-        '{first_name}': 'John',
-        '{last_name}': 'Doe',
-        '{email}': 'john.doe@example.com',
-        '{company}': 'Acme Corp',
-        '{position}': 'Marketing Manager',
-        '{phone}': '+1-555-0123',
-        '{date}': new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}),
-        '{time}': new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}),
-        '{day}': new Date().toLocaleDateString('en-US', {weekday: 'long'}),
-        '{month}': new Date().toLocaleDateString('en-US', {month: 'long'}),
-        '{year}': new Date().getFullYear().toString()
-    };
-    
-    // Replace personalization variables
-    let previewSubject = subject;
-    let previewBody = body;
-    
-    for (const [variable, value] of Object.entries(sampleData)) {
-        previewSubject = previewSubject.replace(new RegExp(variable.replace(/[{}]/g, '\\$&'), 'g'), value);
-        previewBody = previewBody.replace(new RegExp(variable.replace(/[{}]/g, '\\$&'), 'g'), value);
-    }
-    
-    document.getElementById('preview-subject').textContent = previewSubject;
-    document.getElementById('preview-body').innerHTML = previewBody;
-    
-    const modal = new bootstrap.Modal(document.getElementById('previewModal'));
-    modal.show();
 }
 </script>
 {% endblock %} 

@@ -333,19 +333,19 @@ def logout():
 
 @app.route('/recipients')
 def recipients():
-    """View all recipients"""
+    """View and manage recipients"""
     if 'credentials' not in session:
         return redirect(url_for('index'))
     
     conn = get_db()
     cursor = conn.cursor()
     
-    # Get all recipients with group information
+    # Get all recipients
     cursor.execute('''
         SELECT r.*, g.name as group_name 
         FROM recipients r 
         LEFT JOIN recipient_groups g ON r.group_id = g.id 
-        ORDER BY r.created_at DESC
+        ORDER BY r.name
     ''')
     recipients = cursor.fetchall()
     
@@ -357,22 +357,111 @@ def recipients():
     
     return render_template('recipients.html', recipients=recipients, groups=groups)
 
+@app.route('/groups/create', methods=['POST'])
+def create_group():
+    """Create a new recipient group"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    group_name = request.form['group_name']
+    
+    if not group_name.strip():
+        flash('Group name cannot be empty!', 'error')
+        return redirect(url_for('recipients'))
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('INSERT INTO recipient_groups (name) VALUES (?)', (group_name,))
+        conn.commit()
+        flash(f'Group "{group_name}" created successfully!', 'success')
+    except sqlite3.IntegrityError:
+        flash('Group name already exists!', 'error')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('recipients'))
+
+@app.route('/recipients/move_to_group', methods=['POST'])
+def move_to_group():
+    """Move recipient to a group"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    recipient_id = request.form['recipient_id']
+    group_id = request.form.get('group_id') or None
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE recipients SET group_id = ? WHERE id = ?', (group_id, recipient_id))
+    conn.commit()
+    conn.close()
+    
+    flash('Recipient moved successfully!', 'success')
+    return redirect(url_for('recipients'))
+
+@app.route('/recipients/delete/<int:recipient_id>', methods=['POST'])
+def delete_recipient(recipient_id):
+    """Delete a recipient"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM recipients WHERE id = ?', (recipient_id,))
+    conn.commit()
+    conn.close()
+    
+    flash('Recipient deleted successfully!', 'success')
+    return redirect(url_for('recipients'))
+
+@app.route('/groups/delete/<int:group_id>', methods=['POST'])
+def delete_group(group_id):
+    """Delete a group (recipients will be moved to no group)"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Move all recipients in this group to no group
+    cursor.execute('UPDATE recipients SET group_id = NULL WHERE group_id = ?', (group_id,))
+    
+    # Delete the group
+    cursor.execute('DELETE FROM recipient_groups WHERE id = ?', (group_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    flash('Group deleted successfully! Recipients moved to no group.', 'success')
+    return redirect(url_for('recipients'))
+
 @app.route('/recipients/add', methods=['GET', 'POST'])
 def add_recipient():
     """Add new recipient"""
     if 'credentials' not in session:
         return redirect(url_for('index'))
     
+    # Get groups for the form
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM recipient_groups ORDER BY name')
+    groups = cursor.fetchall()
+    
     if request.method == 'POST':
         name = request.form['name']
         email = request.form['email']
-        
-        conn = get_db()
-        cursor = conn.cursor()
+        company = request.form.get('company', '').strip()
+        position = request.form.get('position', '').strip()
+        phone = request.form.get('phone', '').strip()
+        group_id = request.form.get('group_id') or None
         
         try:
-            cursor.execute('INSERT INTO recipients (name, email) VALUES (?, ?)', 
-                         (name, email))
+            cursor.execute('''
+                INSERT INTO recipients (name, email, company, position, phone, group_id) 
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (name, email, company, position, phone, group_id))
             conn.commit()
             flash('Recipient added successfully!', 'success')
         except sqlite3.IntegrityError:
@@ -382,7 +471,8 @@ def add_recipient():
         
         return redirect(url_for('recipients'))
     
-    return render_template('add_recipient.html')
+    conn.close()
+    return render_template('add_recipient.html', groups=groups)
 
 @app.route('/recipients/upload', methods=['POST'])
 def upload_recipients():
@@ -480,9 +570,19 @@ def send_email():
         flash('Subject and message cannot be empty!', 'error')
         return redirect(url_for('compose'))
     
-    # Create campaign
+    # Check hourly email limit
     conn = get_db()
     cursor = conn.cursor()
+    cursor.execute('''
+        SELECT COUNT(*) FROM sent_emails 
+        WHERE sent_at >= datetime('now', '-1 hour') AND status = 'sent'
+    ''')
+    emails_this_hour = cursor.fetchone()[0]
+    
+    if emails_this_hour >= SPAM_PREVENTION['max_per_hour']:
+        flash(f'Hourly email limit reached ({SPAM_PREVENTION["max_per_hour"]} emails). Please wait before sending more.', 'warning')
+        conn.close()
+        return redirect(url_for('compose'))
     
     # Get recipients first to count total
     if send_to == 'all':
@@ -505,6 +605,13 @@ def send_email():
         conn.close()
         return redirect(url_for('compose'))
     
+    # Check if adding these emails would exceed hourly limit
+    if emails_this_hour + len(recipients) > SPAM_PREVENTION['max_per_hour']:
+        remaining_slots = SPAM_PREVENTION['max_per_hour'] - emails_this_hour
+        flash(f'Cannot send {len(recipients)} emails. Only {remaining_slots} slots remaining this hour.', 'warning')
+        conn.close()
+        return redirect(url_for('compose'))
+    
     # Create campaign with total count
     campaign_name = f"Campaign {datetime.now().strftime('%Y-%m-%d %H:%M')}"
     cursor.execute('''
@@ -523,20 +630,25 @@ def send_email():
     
     for recipient in recipients:
         try:
+            # Access SQLite row data properly
+            recipient_email = recipient['email'] if recipient['email'] else ''
+            recipient_name = recipient['name'] if recipient['name'] else 'Friend'
+            recipient_company = recipient['company'] if recipient['company'] else 'Your Company'
+            recipient_position = recipient['position'] if recipient['position'] else 'Valued Customer'
+            recipient_phone = recipient['phone'] if recipient['phone'] else ''
+            
             # Validate recipient email
-            if not recipient['email'] or not recipient['email'].strip():
+            if not recipient_email or not recipient_email.strip():
                 error_count += 1
+                log_sent_email(campaign_id, 'unknown', recipient_name, 'error', 'Empty email address')
                 continue
                 
-            recipient_email = recipient['email'].strip()
-            recipient_name = recipient['name'] or 'Friend'
-            recipient_company = recipient.get('company', '') or 'Your Company'
-            recipient_position = recipient.get('position', '') or 'Valued Customer'
-            recipient_phone = recipient.get('phone', '') or ''
+            recipient_email = recipient_email.strip()
             
             # Validate email format
             if '@' not in recipient_email or '.' not in recipient_email:
                 error_count += 1
+                log_sent_email(campaign_id, recipient_email, recipient_name, 'error', 'Invalid email format')
                 continue
             
             # Enhanced personalization - replace multiple variables
@@ -585,13 +697,13 @@ def send_email():
             
         except HttpError as error:
             error_message = str(error)
-            log_sent_email(campaign_id, recipient.get("email", "unknown"), recipient.get("name", ""), 'error', error_message)
-            flash(f'Failed to send to {recipient.get("email", "unknown")}: {error}', 'error')
+            log_sent_email(campaign_id, recipient_email, recipient_name, 'error', error_message)
+            flash(f'Failed to send to {recipient_email}: {error}', 'error')
             error_count += 1
         except Exception as error:
             error_message = str(error)
-            log_sent_email(campaign_id, recipient.get("email", "unknown"), recipient.get("name", ""), 'error', error_message)
-            flash(f'Unexpected error sending to {recipient.get("email", "unknown")}: {error}', 'error')
+            log_sent_email(campaign_id, recipient_email, recipient_name, 'error', error_message)
+            flash(f'Unexpected error sending to {recipient_email}: {error}', 'error')
             error_count += 1
     
     # Update campaign completion status
@@ -652,7 +764,12 @@ def api_recipients():
     
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT id, name, email FROM recipients ORDER BY name')
+    cursor.execute('''
+        SELECT r.id, r.name, r.email, r.company, r.position, r.phone, r.group_id, g.name as group_name
+        FROM recipients r 
+        LEFT JOIN recipient_groups g ON r.group_id = g.id 
+        ORDER BY r.name
+    ''')
     recipients = cursor.fetchall()
     conn.close()
     
@@ -662,7 +779,12 @@ def api_recipients():
         recipients_list.append({
             'id': recipient['id'],
             'name': recipient['name'],
-            'email': recipient['email']
+            'email': recipient['email'],
+            'company': recipient['company'],
+            'position': recipient['position'],
+            'phone': recipient['phone'],
+            'group_id': recipient['group_id'],
+            'group_name': recipient['group_name']
         })
     
     return jsonify(recipients_list)
