@@ -2,6 +2,10 @@
 
 {% block title %}Compose Email - Gmail Emailer{% endblock %}
 
+{% block head %}
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>
@@ -18,46 +22,43 @@
     <div class="row">
         <div class="col-md-8">
             <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-envelope me-2"></i>
+                        Email Content
+                    </h5>
+                </div>
                 <div class="card-body">
                     <div class="mb-3">
                         <label for="subject" class="form-label">Subject</label>
-                        <input type="text" class="form-control" id="subject" name="subject" 
-                               placeholder="Enter email subject (you can use {name} for personalization)" required>
-                        <div class="form-text">
-                            Use {name} to personalize with recipient names
-                        </div>
+                        <input type="text" class="form-control" id="subject" name="subject" required 
+                               placeholder="Enter email subject (use {name}, {company}, etc. for personalization)">
                     </div>
                     
-                    <div class="mb-3">
+                    <div class="mb-4">
                         <label for="body" class="form-label">Message</label>
-                        <textarea class="form-control" id="body" name="body" rows="12" 
-                                  placeholder="Write your email message here..." required></textarea>
-                        <div class="form-text">
-                            Available variables: {name} for recipient name
-                        </div>
+                        <textarea class="form-control" id="body" name="body" rows="15" required 
+                                  placeholder="Write your email message here..."></textarea>
                     </div>
                     
-                    <div class="mb-3">
-                        <label class="form-label">Send to:</label>
+                    <div class="mb-4">
+                        <h6>Recipients</h6>
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="send_to" id="send_all" value="all" checked>
                             <label class="form-check-label" for="send_all">
-                                All recipients
+                                Send to all recipients
                             </label>
                         </div>
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="send_to" id="send_selected" value="selected">
                             <label class="form-check-label" for="send_selected">
-                                Selected recipients
+                                Send to selected recipients
                             </label>
                         </div>
-                    </div>
-                    
-                    <div id="recipient-selection" style="display: none;">
-                        <div class="mb-3">
-                            <label class="form-label">Select Recipients:</label>
-                            <div class="border p-3 rounded" style="max-height: 200px; overflow-y: auto;">
-                                <!-- Recipients will be loaded here -->
+                        
+                        <div id="recipient-selection" style="display: none;" class="mt-3">
+                            <div class="border rounded p-3 bg-light">
+                                Select recipients above to load the list
                             </div>
                         </div>
                     </div>
@@ -80,33 +81,70 @@
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-info-circle me-2"></i>
-                        Email Tips
+                        <i class="fas fa-magic me-2"></i>
+                        Personalization Variables
                     </h5>
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
-                        <h6>Personalization</h6>
-                        <p class="small text-muted">Use {name} in your subject and message to automatically insert recipient names.</p>
+                        <h6>Contact Information</h6>
+                        <div class="small text-muted mb-2">
+                            <code>{name}</code> - Full name<br>
+                            <code>{first_name}</code> - First name only<br>
+                            <code>{last_name}</code> - Last name only<br>
+                            <code>{email}</code> - Email address<br>
+                            <code>{company}</code> - Company name<br>
+                            <code>{position}</code> - Job position<br>
+                            <code>{phone}</code> - Phone number
+                        </div>
                     </div>
                     
                     <div class="mb-3">
-                        <h6>Spam Prevention</h6>
-                        <p class="small text-muted">
-                            • 30-60 second delays between emails<br>
-                            • Maximum 50 emails per hour<br>
-                            • Maximum 500 emails per day
-                        </p>
+                        <h6>Date & Time</h6>
+                        <div class="small text-muted mb-2">
+                            <code>{date}</code> - Current date<br>
+                            <code>{time}</code> - Current time<br>
+                            <code>{day}</code> - Day of week<br>
+                            <code>{month}</code> - Month name<br>
+                            <code>{year}</code> - Current year
+                        </div>
                     </div>
                     
                     <div class="mb-3">
-                        <h6>Best Practices</h6>
-                        <ul class="small text-muted">
-                            <li>Keep subject lines concise</li>
-                            <li>Personalize your message</li>
-                            <li>Include clear call-to-action</li>
-                            <li>Test with yourself first</li>
-                        </ul>
+                        <h6>Example Usage</h6>
+                        <div class="small text-muted">
+                            <em>Subject:</em> "Hello {first_name}!"<br>
+                            <em>Message:</em> "Dear {name}, I hope this finds you well at {company}..."
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-shield-alt me-2"></i>
+                        Spam Prevention
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="small text-muted">
+                        <div class="mb-2">
+                            <i class="fas fa-clock me-1"></i>
+                            Delay: 30-60 seconds between emails
+                        </div>
+                        <div class="mb-2">
+                            <i class="fas fa-hourglass-half me-1"></i>
+                            Hourly limit: 50 emails
+                        </div>
+                        <div class="mb-2">
+                            <i class="fas fa-calendar-day me-1"></i>
+                            Daily limit: 500 emails
+                        </div>
+                        <div class="mb-2">
+                            <i class="fas fa-random me-1"></i>
+                            Random intervals for natural sending
+                        </div>
                     </div>
                 </div>
             </div>
@@ -154,7 +192,7 @@
                 </div>
                 <div class="mb-3">
                     <strong>Message:</strong>
-                    <div id="preview-body" class="border p-3 rounded bg-light" style="white-space: pre-wrap;"></div>
+                    <div id="preview-body" class="border p-3 rounded bg-light"></div>
                 </div>
                 <div class="text-muted small">
                     <i class="fas fa-info-circle me-1"></i>
@@ -171,38 +209,62 @@
 
 {% block scripts %}
 <script>
-// Template data
+// Initialize TinyMCE Rich Text Editor
+tinymce.init({
+    selector: '#body',
+    height: 400,
+    menubar: false,
+    plugins: [
+        'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+        'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+        'insertdatetime', 'media', 'table', 'help', 'wordcount'
+    ],
+    toolbar: 'undo redo | blocks | ' +
+        'bold italic forecolor | alignleft aligncenter ' +
+        'alignright alignjustify | bullist numlist outdent indent | ' +
+        'removeformat | help',
+    content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
+    setup: function (editor) {
+        editor.on('change', function () {
+            editor.save();
+        });
+    }
+});
+
+// Enhanced template data with new personalization variables
 const templates = {
     greeting: {
-        subject: "Hello {name}!",
-        body: `Hi {name},
+        subject: "Hello {first_name}!",
+        body: `<p>Hi {name},</p>
 
-I hope this email finds you well.
+<p>I hope this email finds you well at {company}.</p>
 
-Best regards,
-[Your Name]`
+<p>Best regards,<br>
+[Your Name]</p>`
     },
     business: {
         subject: "Business Opportunity - {name}",
-        body: `Dear {name},
+        body: `<p>Dear {name},</p>
 
-I wanted to reach out to discuss a potential business opportunity that might interest you.
+<p>I wanted to reach out to discuss a potential business opportunity that might interest you and {company}.</p>
 
-Looking forward to connecting with you.
+<p>As someone in the {position} role, I believe this could be particularly valuable for your organization.</p>
 
-Best regards,
-[Your Name]`
+<p>Looking forward to connecting with you.</p>
+
+<p>Best regards,<br>
+[Your Name]</p>`
     },
     followup: {
-        subject: "Following up - {name}",
-        body: `Hi {name},
+        subject: "Following up - {first_name}",
+        body: `<p>Hi {name},</p>
 
-I wanted to follow up on our previous conversation.
+<p>I wanted to follow up on our previous conversation regarding {company}.</p>
 
-Please let me know if you have any questions.
+<p>Please let me know if you have any questions or if there's a good time to discuss this further.</p>
 
-Best regards,
-[Your Name]`
+<p>Best regards,<br>
+[Your Name]</p>`
     }
 };
 
@@ -257,8 +319,11 @@ function loadRecipients() {
                         <input class="form-check-input" type="checkbox" name="recipient_ids" 
                                value="${recipient.id}" id="recipient_${recipient.id}">
                         <label class="form-check-label" for="recipient_${recipient.id}">
-                            <strong>${recipient.name}</strong><br>
+                            <strong>${recipient.name}</strong>
+                            ${recipient.company ? `<span class="badge bg-secondary ms-1">${recipient.company}</span>` : ''}
+                            <br>
                             <small class="text-muted">${recipient.email}</small>
+                            ${recipient.position ? `<br><small class="text-muted">${recipient.position}</small>` : ''}
                         </label>
                     </div>
                 `;
@@ -301,22 +366,55 @@ function insertTemplate(templateName) {
     const template = templates[templateName];
     if (template) {
         document.getElementById('subject').value = template.subject;
-        document.getElementById('body').value = template.body;
+        
+        // Set TinyMCE content
+        if (tinymce.get('body')) {
+            tinymce.get('body').setContent(template.body);
+        } else {
+            document.getElementById('body').value = template.body;
+        }
     }
 }
 
-// Show preview
+// Enhanced preview with personalization variables
 function showPreview() {
     const subject = document.getElementById('subject').value;
-    const body = document.getElementById('body').value;
+    let body = '';
     
-    // Replace {name} with sample name for preview
-    const sampleName = 'John Doe';
-    const previewSubject = subject.replace(/{name}/g, sampleName);
-    const previewBody = body.replace(/{name}/g, sampleName);
+    // Get content from TinyMCE or fallback to textarea
+    if (tinymce.get('body')) {
+        body = tinymce.get('body').getContent();
+    } else {
+        body = document.getElementById('body').value;
+    }
+    
+    // Sample data for preview
+    const sampleData = {
+        '{name}': 'John Doe',
+        '{first_name}': 'John',
+        '{last_name}': 'Doe',
+        '{email}': 'john.doe@example.com',
+        '{company}': 'Acme Corp',
+        '{position}': 'Marketing Manager',
+        '{phone}': '+1-555-0123',
+        '{date}': new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}),
+        '{time}': new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}),
+        '{day}': new Date().toLocaleDateString('en-US', {weekday: 'long'}),
+        '{month}': new Date().toLocaleDateString('en-US', {month: 'long'}),
+        '{year}': new Date().getFullYear().toString()
+    };
+    
+    // Replace personalization variables
+    let previewSubject = subject;
+    let previewBody = body;
+    
+    for (const [variable, value] of Object.entries(sampleData)) {
+        previewSubject = previewSubject.replace(new RegExp(variable.replace(/[{}]/g, '\\$&'), 'g'), value);
+        previewBody = previewBody.replace(new RegExp(variable.replace(/[{}]/g, '\\$&'), 'g'), value);
+    }
     
     document.getElementById('preview-subject').textContent = previewSubject;
-    document.getElementById('preview-body').textContent = previewBody;
+    document.getElementById('preview-body').innerHTML = previewBody;
     
     const modal = new bootstrap.Modal(document.getElementById('previewModal'));
     modal.show();

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -70,7 +70,12 @@ def init_db():
             name TEXT NOT NULL,
             subject TEXT NOT NULL,
             body TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'draft',
+            total_recipients INTEGER DEFAULT 0,
+            sent_count INTEGER DEFAULT 0,
+            error_count INTEGER DEFAULT 0,
+            completed_at TIMESTAMP NULL
         )
     ''')
     
@@ -82,7 +87,16 @@ def init_db():
             recipient_name TEXT,
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             status TEXT DEFAULT 'sent',
+            error_message TEXT NULL,
             FOREIGN KEY (campaign_id) REFERENCES email_campaigns (id)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recipient_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
@@ -91,9 +105,65 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             email TEXT NOT NULL UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            company TEXT,
+            position TEXT,
+            phone TEXT,
+            group_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (group_id) REFERENCES recipient_groups (id)
         )
     ''')
+    
+    # Add missing columns to existing tables
+    try:
+        cursor.execute('ALTER TABLE email_campaigns ADD COLUMN status TEXT DEFAULT "draft"')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute('ALTER TABLE email_campaigns ADD COLUMN total_recipients INTEGER DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE email_campaigns ADD COLUMN sent_count INTEGER DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE email_campaigns ADD COLUMN error_count INTEGER DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE email_campaigns ADD COLUMN completed_at TIMESTAMP NULL')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE sent_emails ADD COLUMN error_message TEXT NULL')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE recipients ADD COLUMN company TEXT')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE recipients ADD COLUMN position TEXT')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE recipients ADD COLUMN phone TEXT')
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute('ALTER TABLE recipients ADD COLUMN group_id INTEGER')
+    except sqlite3.OperationalError:
+        pass
     
     # Clean up any recipients with blank or invalid email addresses
     cursor.execute('''
@@ -263,17 +333,29 @@ def logout():
 
 @app.route('/recipients')
 def recipients():
-    """Manage recipients"""
+    """View all recipients"""
     if 'credentials' not in session:
         return redirect(url_for('index'))
     
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM recipients ORDER BY created_at DESC')
+    
+    # Get all recipients with group information
+    cursor.execute('''
+        SELECT r.*, g.name as group_name 
+        FROM recipients r 
+        LEFT JOIN recipient_groups g ON r.group_id = g.id 
+        ORDER BY r.created_at DESC
+    ''')
     recipients = cursor.fetchall()
+    
+    # Get all groups
+    cursor.execute('SELECT * FROM recipient_groups ORDER BY name')
+    groups = cursor.fetchall()
+    
     conn.close()
     
-    return render_template('recipients.html', recipients=recipients)
+    return render_template('recipients.html', recipients=recipients, groups=groups)
 
 @app.route('/recipients/add', methods=['GET', 'POST'])
 def add_recipient():
@@ -325,13 +407,21 @@ def upload_recipients():
             conn = get_db()
             cursor = conn.cursor()
             
+            # Create a group for this CSV upload
+            group_name = f"CSV Upload - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            cursor.execute('INSERT INTO recipient_groups (name) VALUES (?)', (group_name,))
+            group_id = cursor.lastrowid
+            
             added_count = 0
             skipped_count = 0
             
             for row in csv_input:
-                # Get name and email, with fallback checks
+                # Get data with fallback checks for different column name formats
                 name = row.get('name', row.get('Name', '')).strip()
                 email = row.get('email', row.get('Email', '')).strip()
+                company = row.get('company', row.get('Company', '')).strip()
+                position = row.get('position', row.get('Position', row.get('job_title', row.get('Job Title', '')))).strip()
+                phone = row.get('phone', row.get('Phone', row.get('phone_number', row.get('Phone Number', '')))).strip()
                 
                 # Validate that both name and email are not empty
                 if not name or not email:
@@ -344,8 +434,10 @@ def upload_recipients():
                     continue
                 
                 try:
-                    cursor.execute('INSERT INTO recipients (name, email) VALUES (?, ?)', 
-                                 (name, email))
+                    cursor.execute('''
+                        INSERT INTO recipients (name, email, company, position, phone, group_id) 
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (name, email, company, position, phone, group_id))
                     added_count += 1
                 except sqlite3.IntegrityError:
                     skipped_count += 1  # Skip duplicates
@@ -354,7 +446,7 @@ def upload_recipients():
             conn.close()
             
             if added_count > 0:
-                flash(f'Added {added_count} recipients! Skipped {skipped_count} invalid/duplicate entries.', 'success')
+                flash(f'Added {added_count} recipients to group "{group_name}"! Skipped {skipped_count} invalid/duplicate entries.', 'success')
             else:
                 flash(f'No valid recipients found in CSV. Skipped {skipped_count} entries.', 'warning')
                 
@@ -391,11 +483,8 @@ def send_email():
     # Create campaign
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO email_campaigns (name, subject, body) VALUES (?, ?, ?)', 
-                 (f"Campaign {datetime.now().strftime('%Y-%m-%d %H:%M')}", subject, body))
-    campaign_id = cursor.lastrowid
     
-    # Get recipients
+    # Get recipients first to count total
     if send_to == 'all':
         cursor.execute('SELECT * FROM recipients WHERE email IS NOT NULL AND email != ""')
     else:
@@ -410,11 +499,20 @@ def send_email():
             return redirect(url_for('compose'))
     
     recipients = cursor.fetchall()
-    conn.close()
     
     if not recipients:
         flash('No valid recipients found!', 'error')
+        conn.close()
         return redirect(url_for('compose'))
+    
+    # Create campaign with total count
+    campaign_name = f"Campaign {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    cursor.execute('''
+        INSERT INTO email_campaigns (name, subject, body, status, total_recipients) 
+        VALUES (?, ?, ?, ?, ?)
+    ''', (campaign_name, subject, body, 'sending', len(recipients)))
+    campaign_id = cursor.lastrowid
+    conn.commit()
     
     # Send emails
     credentials = Credentials(**session['credentials'])
@@ -432,45 +530,87 @@ def send_email():
                 
             recipient_email = recipient['email'].strip()
             recipient_name = recipient['name'] or 'Friend'
+            recipient_company = recipient.get('company', '') or 'Your Company'
+            recipient_position = recipient.get('position', '') or 'Valued Customer'
+            recipient_phone = recipient.get('phone', '') or ''
             
             # Validate email format
             if '@' not in recipient_email or '.' not in recipient_email:
                 error_count += 1
                 continue
             
+            # Enhanced personalization - replace multiple variables
+            personalized_subject = subject
+            personalized_body = body
+            
+            personalization_vars = {
+                '{name}': recipient_name,
+                '{email}': recipient_email,
+                '{company}': recipient_company,
+                '{position}': recipient_position,
+                '{phone}': recipient_phone,
+                '{first_name}': recipient_name.split()[0] if recipient_name else 'Friend',
+                '{last_name}': recipient_name.split()[-1] if len(recipient_name.split()) > 1 else '',
+                '{date}': datetime.now().strftime('%B %d, %Y'),
+                '{time}': datetime.now().strftime('%I:%M %p'),
+                '{day}': datetime.now().strftime('%A'),
+                '{month}': datetime.now().strftime('%B'),
+                '{year}': datetime.now().strftime('%Y')
+            }
+            
+            for var, value in personalization_vars.items():
+                personalized_subject = personalized_subject.replace(var, value)
+                personalized_body = personalized_body.replace(var, value)
+            
             # Create message
             message = create_message(
                 sender='me',
                 to=recipient_email,
-                subject=subject.replace('{name}', recipient_name),
-                body=body.replace('{name}', recipient_name)
+                subject=personalized_subject,
+                body=personalized_body
             )
             
             # Send message
             service.users().messages().send(userId='me', body=message).execute()
             
             # Log sent email
-            log_sent_email(campaign_id, recipient_email, recipient_name)
+            log_sent_email(campaign_id, recipient_email, recipient_name, 'sent')
             
             success_count += 1
             
-            # Anti-spam delay
+            # Anti-spam delay (30-60 seconds random)
             delay = random.randint(SPAM_PREVENTION['min_delay'], SPAM_PREVENTION['max_delay'])
+            print(f"DEBUG: Waiting {delay} seconds before next email...")
             time.sleep(delay)
             
         except HttpError as error:
+            error_message = str(error)
+            log_sent_email(campaign_id, recipient.get("email", "unknown"), recipient.get("name", ""), 'error', error_message)
             flash(f'Failed to send to {recipient.get("email", "unknown")}: {error}', 'error')
             error_count += 1
         except Exception as error:
+            error_message = str(error)
+            log_sent_email(campaign_id, recipient.get("email", "unknown"), recipient.get("name", ""), 'error', error_message)
             flash(f'Unexpected error sending to {recipient.get("email", "unknown")}: {error}', 'error')
             error_count += 1
     
+    # Update campaign completion status
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE email_campaigns 
+        SET status = ?, sent_count = ?, error_count = ?, completed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    ''', ('completed', success_count, error_count, campaign_id))
+    conn.commit()
+    conn.close()
+    
     if success_count > 0:
-        flash(f'Successfully sent {success_count} emails!', 'success')
+        flash(f'Campaign completed! Successfully sent {success_count} emails!', 'success')
     if error_count > 0:
         flash(f'{error_count} emails failed to send.', 'warning')
         
-    return redirect(url_for('index'))
+    return redirect(url_for('campaigns'))
 
 def create_message(sender, to, subject, body):
     """Create email message"""
@@ -482,14 +622,14 @@ def create_message(sender, to, subject, body):
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
     return {'raw': raw_message}
 
-def log_sent_email(campaign_id, recipient_email, recipient_name):
+def log_sent_email(campaign_id, recipient_email, recipient_name, status='sent', error_message=''):
     """Log sent email to database"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO sent_emails (campaign_id, recipient_email, recipient_name) 
-        VALUES (?, ?, ?)
-    ''', (campaign_id, recipient_email, recipient_name))
+        INSERT INTO sent_emails (campaign_id, recipient_email, recipient_name, status, error_message) 
+        VALUES (?, ?, ?, ?, ?)
+    ''', (campaign_id, recipient_email, recipient_name, status, error_message))
     conn.commit()
     conn.close()
 
@@ -535,17 +675,71 @@ def campaigns():
     
     conn = get_db()
     cursor = conn.cursor()
+    
+    # Get all campaigns with statistics
     cursor.execute('''
         SELECT c.*, COUNT(s.id) as sent_count 
         FROM email_campaigns c 
-        LEFT JOIN sent_emails s ON c.id = s.campaign_id 
+        LEFT JOIN sent_emails s ON c.id = s.campaign_id AND s.status = 'sent'
         GROUP BY c.id 
         ORDER BY c.created_at DESC
     ''')
     campaigns = cursor.fetchall()
+    
+    # Calculate summary statistics
+    total_sent = 0
+    total_errors = 0
+    active_campaigns = 0
+    
+    for campaign in campaigns:
+        total_sent += campaign.get('sent_count', 0) or 0
+        total_errors += campaign.get('error_count', 0) or 0
+        if campaign.get('status') in ['sending', 'draft']:
+            active_campaigns += 1
+    
     conn.close()
     
-    return render_template('campaigns.html', campaigns=campaigns)
+    return render_template('campaigns.html', 
+                         campaigns=campaigns,
+                         total_sent=total_sent,
+                         total_errors=total_errors,
+                         active_campaigns=active_campaigns)
+
+@app.route('/api/campaigns/<int:campaign_id>')
+def api_campaign_details(campaign_id):
+    """API endpoint to get campaign details"""
+    if 'credentials' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get campaign details
+    cursor.execute('SELECT * FROM email_campaigns WHERE id = ?', (campaign_id,))
+    campaign = cursor.fetchone()
+    
+    if not campaign:
+        return jsonify({'error': 'Campaign not found'}), 404
+    
+    # Get email results
+    cursor.execute('''
+        SELECT recipient_email, recipient_name, status, sent_at, error_message
+        FROM sent_emails 
+        WHERE campaign_id = ? 
+        ORDER BY sent_at DESC
+    ''', (campaign_id,))
+    emails = cursor.fetchall()
+    
+    conn.close()
+    
+    # Convert to dictionaries
+    campaign_dict = dict(campaign)
+    emails_list = [dict(email) for email in emails]
+    
+    return jsonify({
+        'campaign': campaign_dict,
+        'emails': emails_list
+    })
 
 @app.route('/privacy')
 def privacy():
@@ -556,6 +750,32 @@ def privacy():
 def terms():
     """Terms of Service page"""
     return render_template('terms.html', current_date=datetime.now().strftime('%B %d, %Y'))
+
+@app.route('/download-template')
+def download_template():
+    """Download CSV template"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    # Create CSV template content
+    csv_content = """name,email,company,position,phone
+John Doe,john.doe@example.com,Acme Corp,Marketing Manager,+1-555-0123
+Jane Smith,jane.smith@example.com,Tech Solutions,Sales Director,+1-555-0124
+Bob Johnson,bob.johnson@example.com,Innovation Inc,Product Manager,+1-555-0125
+Alice Brown,alice.brown@example.com,Digital Agency,Creative Director,+1-555-0126
+Mike Wilson,mike.wilson@example.com,StartupXYZ,CEO,+1-555-0127"""
+    
+    # Create response with proper headers for file download
+    
+    response = Response(
+        csv_content,
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': 'attachment; filename=recipients_template.csv'
+        }
+    )
+    
+    return response
 
 # Debug endpoint to check session state
 @app.route('/debug-session')
