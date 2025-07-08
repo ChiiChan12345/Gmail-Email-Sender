@@ -448,6 +448,27 @@ def terms():
     """Terms of Service page"""
     return render_template('terms.html', current_date=datetime.now().strftime('%B %d, %Y'))
 
+# Debug endpoint to check session state
+@app.route('/debug-session')
+def debug_session():
+    """Debug endpoint to check session state"""
+    session_info = {
+        'credentials_exists': 'credentials' in session,
+        'session_keys': list(session.keys()),
+        'session_id': session.get('_id', 'No ID'),
+        'redirect_uri': REDIRECT_URI,
+        'secret_key_set': bool(app.secret_key),
+        'cookie_secure': app.config.get('SESSION_COOKIE_SECURE'),
+        'session_permanent': session.permanent
+    }
+    
+    if 'credentials' in session:
+        creds_info = session['credentials']
+        session_info['credentials_keys'] = list(creds_info.keys()) if isinstance(creds_info, dict) else 'Not a dict'
+        session_info['has_token'] = 'token' in creds_info if isinstance(creds_info, dict) else False
+    
+    return f"<h1>Session Debug Info</h1><pre>{json.dumps(session_info, indent=2)}</pre>"
+
 if __name__ == '__main__':
     init_db()
     
