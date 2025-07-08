@@ -95,6 +95,12 @@ def init_db():
         )
     ''')
     
+    # Clean up any recipients with blank or invalid email addresses
+    cursor.execute('''
+        DELETE FROM recipients 
+        WHERE email IS NULL OR email = '' OR name IS NULL OR name = ''
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -312,25 +318,48 @@ def upload_recipients():
         return redirect(url_for('recipients'))
     
     if file and file.filename and file.filename.endswith('.csv'):
-        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-        csv_input = csv.DictReader(stream)
-        
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        added_count = 0
-        for row in csv_input:
-            try:
-                cursor.execute('INSERT INTO recipients (name, email) VALUES (?, ?)', 
-                             (row.get('name', ''), row.get('email', '')))
-                added_count += 1
-            except sqlite3.IntegrityError:
-                continue  # Skip duplicates
-        
-        conn.commit()
-        conn.close()
-        
-        flash(f'Added {added_count} recipients!', 'success')
+        try:
+            stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+            csv_input = csv.DictReader(stream)
+            
+            conn = get_db()
+            cursor = conn.cursor()
+            
+            added_count = 0
+            skipped_count = 0
+            
+            for row in csv_input:
+                # Get name and email, with fallback checks
+                name = row.get('name', row.get('Name', '')).strip()
+                email = row.get('email', row.get('Email', '')).strip()
+                
+                # Validate that both name and email are not empty
+                if not name or not email:
+                    skipped_count += 1
+                    continue
+                
+                # Basic email validation
+                if '@' not in email or '.' not in email:
+                    skipped_count += 1
+                    continue
+                
+                try:
+                    cursor.execute('INSERT INTO recipients (name, email) VALUES (?, ?)', 
+                                 (name, email))
+                    added_count += 1
+                except sqlite3.IntegrityError:
+                    skipped_count += 1  # Skip duplicates
+            
+            conn.commit()
+            conn.close()
+            
+            if added_count > 0:
+                flash(f'Added {added_count} recipients! Skipped {skipped_count} invalid/duplicate entries.', 'success')
+            else:
+                flash(f'No valid recipients found in CSV. Skipped {skipped_count} entries.', 'warning')
+                
+        except Exception as e:
+            flash(f'Error processing CSV file: {str(e)}', 'error')
     else:
         flash('Please upload a CSV file!', 'error')
     
@@ -354,6 +383,11 @@ def send_email():
     body = request.form['body']
     send_to = request.form['send_to']  # 'all' or 'selected'
     
+    # Validate subject and body
+    if not subject.strip() or not body.strip():
+        flash('Subject and message cannot be empty!', 'error')
+        return redirect(url_for('compose'))
+    
     # Create campaign
     conn = get_db()
     cursor = conn.cursor()
@@ -363,40 +397,60 @@ def send_email():
     
     # Get recipients
     if send_to == 'all':
-        cursor.execute('SELECT * FROM recipients')
+        cursor.execute('SELECT * FROM recipients WHERE email IS NOT NULL AND email != ""')
     else:
         recipient_ids = request.form.getlist('recipient_ids')
         if recipient_ids:
             placeholders = ','.join(['?' for _ in recipient_ids])
-            cursor.execute(f'SELECT * FROM recipients WHERE id IN ({placeholders})', 
+            cursor.execute(f'SELECT * FROM recipients WHERE id IN ({placeholders}) AND email IS NOT NULL AND email != ""', 
                          recipient_ids)
         else:
             flash('No recipients selected!', 'error')
+            conn.close()
             return redirect(url_for('compose'))
     
     recipients = cursor.fetchall()
     conn.close()
+    
+    if not recipients:
+        flash('No valid recipients found!', 'error')
+        return redirect(url_for('compose'))
     
     # Send emails
     credentials = Credentials(**session['credentials'])
     service = build('gmail', 'v1', credentials=credentials)
     
     success_count = 0
+    error_count = 0
+    
     for recipient in recipients:
         try:
+            # Validate recipient email
+            if not recipient['email'] or not recipient['email'].strip():
+                error_count += 1
+                continue
+                
+            recipient_email = recipient['email'].strip()
+            recipient_name = recipient['name'] or 'Friend'
+            
+            # Validate email format
+            if '@' not in recipient_email or '.' not in recipient_email:
+                error_count += 1
+                continue
+            
             # Create message
             message = create_message(
                 sender='me',
-                to=recipient['email'],
-                subject=subject.replace('{name}', recipient['name']),
-                body=body.replace('{name}', recipient['name'])
+                to=recipient_email,
+                subject=subject.replace('{name}', recipient_name),
+                body=body.replace('{name}', recipient_name)
             )
             
             # Send message
             service.users().messages().send(userId='me', body=message).execute()
             
             # Log sent email
-            log_sent_email(campaign_id, recipient['email'], recipient['name'])
+            log_sent_email(campaign_id, recipient_email, recipient_name)
             
             success_count += 1
             
@@ -405,9 +459,17 @@ def send_email():
             time.sleep(delay)
             
         except HttpError as error:
-            flash(f'Failed to send to {recipient["email"]}: {error}', 'error')
+            flash(f'Failed to send to {recipient.get("email", "unknown")}: {error}', 'error')
+            error_count += 1
+        except Exception as error:
+            flash(f'Unexpected error sending to {recipient.get("email", "unknown")}: {error}', 'error')
+            error_count += 1
     
-    flash(f'Successfully sent {success_count} emails!', 'success')
+    if success_count > 0:
+        flash(f'Successfully sent {success_count} emails!', 'success')
+    if error_count > 0:
+        flash(f'{error_count} emails failed to send.', 'warning')
+        
     return redirect(url_for('index'))
 
 def create_message(sender, to, subject, body):
@@ -441,6 +503,29 @@ def credentials_to_dict(credentials):
         'client_secret': credentials.client_secret,
         'scopes': credentials.scopes
     }
+
+@app.route('/api/recipients')
+def api_recipients():
+    """API endpoint to get recipients as JSON"""
+    if 'credentials' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, name, email FROM recipients ORDER BY name')
+    recipients = cursor.fetchall()
+    conn.close()
+    
+    # Convert to list of dictionaries
+    recipients_list = []
+    for recipient in recipients:
+        recipients_list.append({
+            'id': recipient['id'],
+            'name': recipient['name'],
+            'email': recipient['email']
+        })
+    
+    return jsonify(recipients_list)
 
 @app.route('/campaigns')
 def campaigns():

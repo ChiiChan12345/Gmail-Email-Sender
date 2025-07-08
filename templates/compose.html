@@ -228,10 +228,72 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Load recipients for selection
 function loadRecipients() {
-    // This would typically fetch recipients from the server
-    // For now, we'll show a placeholder
     const container = document.querySelector('#recipient-selection .border');
     container.innerHTML = '<div class="text-muted">Loading recipients...</div>';
+    
+    fetch('/api/recipients')
+        .then(response => response.json())
+        .then(recipients => {
+            if (recipients.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-3">
+                        <i class="fas fa-users text-muted mb-2" style="font-size: 2rem;"></i>
+                        <p class="text-muted mb-2">No recipients found</p>
+                        <a href="{{ url_for('recipients') }}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-plus me-1"></i>
+                            Add Recipients
+                        </a>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div class="mb-2"><strong>Select Recipients:</strong></div>';
+            html += '<div style="max-height: 200px; overflow-y: auto;">';
+            
+            recipients.forEach(recipient => {
+                html += `
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="recipient_ids" 
+                               value="${recipient.id}" id="recipient_${recipient.id}">
+                        <label class="form-check-label" for="recipient_${recipient.id}">
+                            <strong>${recipient.name}</strong><br>
+                            <small class="text-muted">${recipient.email}</small>
+                        </label>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            html += `
+                <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="selectAllRecipients()">
+                        Select All
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectNoneRecipients()">
+                        Select None
+                    </button>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading recipients:', error);
+            container.innerHTML = '<div class="text-danger">Error loading recipients. Please try again.</div>';
+        });
+}
+
+// Select all recipients
+function selectAllRecipients() {
+    const checkboxes = document.querySelectorAll('input[name="recipient_ids"]');
+    checkboxes.forEach(checkbox => checkbox.checked = true);
+}
+
+// Select no recipients
+function selectNoneRecipients() {
+    const checkboxes = document.querySelectorAll('input[name="recipient_ids"]');
+    checkboxes.forEach(checkbox => checkbox.checked = false);
 }
 
 // Insert template
