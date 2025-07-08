@@ -427,8 +427,11 @@ if __name__ == '__main__':
     print("4. Create OAuth2 credentials")
     print("5. Add your deployment URL + /callback to authorized redirect URIs")
     print("6. Set environment variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI")
-    print("7. Change the secret_key to something secure")
+    print("7. Configure OAuth consent screen with privacy policy and terms")
+    print("8. Add yourself as a test user")
     print(f"\n🌐 Redirect URI should be: {REDIRECT_URI}")
+    print(f"🌐 Privacy Policy: {REDIRECT_URI.replace('/callback', '/privacy')}")
+    print(f"🌐 Terms of Service: {REDIRECT_URI.replace('/callback', '/terms')}")
     print(f"🌐 Server will run on port: {os.environ.get('PORT', 5000)}")
     
     # Railway automatically provides PORT environment variable
