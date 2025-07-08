@@ -150,7 +150,12 @@ def callback():
     state = session.get('state')
     
     if not state:
-        flash('Authentication failed. Please try again.', 'error')
+        flash('Authentication failed: No state found in session. Please try again.', 'error')
+        return redirect(url_for('index'))
+    
+    # Check if we have the authorization code
+    if 'code' not in request.args:
+        flash('Authentication failed: No authorization code received.', 'error')
         return redirect(url_for('index'))
     
     try:
@@ -181,6 +186,9 @@ def callback():
         
     except Exception as e:
         flash(f'Authentication failed: {str(e)}', 'error')
+        print(f"OAuth Error: {str(e)}")  # For debugging
+        print(f"Request URL: {request.url}")
+        print(f"Redirect URI: {REDIRECT_URI}")
         return redirect(url_for('index'))
 
 @app.route('/logout')
