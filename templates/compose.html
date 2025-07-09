@@ -67,7 +67,7 @@
                             </label>
                         </div>
                         
-                        <div id="recipient-selection" style="{% if not preselected_recipients %}display: none;{% endif %}" class="mt-3">
+                        <div id="recipient-selection" class="mt-3" style="display: none;">
                             <div class="border rounded p-3 bg-light">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <small class="text-muted">Recipient Selection</small>
@@ -107,8 +107,6 @@
                                                 {% endfor %}
                                             </div>
                                         </div>
-                                    {% else %}
-                                        Loading recipients...
                                     {% endif %}
                                 </div>
                             </div>
