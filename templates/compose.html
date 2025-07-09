@@ -52,25 +52,64 @@
                                   placeholder="Enter HTML code here..."></textarea>
                     </div>
                     
-                    <div class="mb-4">
-                        <h6>Recipients</h6>
+                    <div class="mb-3">
+                        <label class="form-label">Send To</label>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="send_to" id="send_all" value="all" checked>
+                            <input class="form-check-input" type="radio" name="send_to" id="send_all" value="all" {% if not preselected_recipients %}checked{% endif %}>
                             <label class="form-check-label" for="send_all">
                                 Send to all recipients
                             </label>
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="send_to" id="send_selected" value="selected">
+                            <input class="form-check-input" type="radio" name="send_to" id="send_selected" value="selected" {% if preselected_recipients %}checked{% endif %}>
                             <label class="form-check-label" for="send_selected">
                                 Send to selected recipients
                             </label>
                         </div>
                         
-                        <div id="recipient-selection" style="display: none;" class="mt-3">
+                        <div id="recipient-selection" style="{% if not preselected_recipients %}display: none;{% endif %}" class="mt-3">
                             <div class="border rounded p-3 bg-light">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <small class="text-muted">Recipient Selection</small>
+                                    <span id="recipient-counter" class="badge bg-primary">{% if preselected_recipients %}{{ preselected_recipients|length }} selected{% else %}0 selected{% endif %}</span>
+                                </div>
                                 <div id="recipient-list">
-                                    Loading recipients...
+                                    {% if preselected_recipients %}
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <small class="text-muted">Preselected recipients:</small>
+                                                <div>
+                                                    <button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="selectAllRecipients()">Select All</button>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllRecipients()">Deselect All</button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="recipient-checkboxes" style="max-height: 300px; overflow-y: auto;">
+                                                {% for recipient in preselected_recipients %}
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input recipient-checkbox" type="checkbox" name="recipient_ids" value="{{ recipient.id }}" id="recipient_{{ recipient.id }}" checked>
+                                                    <label class="form-check-label" for="recipient_{{ recipient.id }}">
+                                                        <div class="d-flex justify-content-between align-items-start">
+                                                            <div>
+                                                                <strong>{{ recipient.name }}</strong>
+                                                                {% if recipient.company %}
+                                                                    <span class="badge bg-secondary ms-2">{{ recipient.company }}</span>
+                                                                {% endif %}
+                                                                {% if recipient.position %}
+                                                                    <span class="badge bg-info ms-1">{{ recipient.position }}</span>
+                                                                {% endif %}
+                                                                <br>
+                                                                <small class="text-muted">{{ recipient.email }}</small>
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        Loading recipients...
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -224,7 +263,11 @@ document.addEventListener('DOMContentLoaded', function() {
     sendSelectedRadio.addEventListener('change', function() {
         if (this.checked) {
             recipientSelection.style.display = 'block';
-            loadRecipients();
+            // Only load recipients if we don't have preselected ones
+            const existingCheckboxes = document.querySelectorAll('.recipient-checkbox');
+            if (existingCheckboxes.length === 0) {
+                loadRecipients();
+            }
         }
     });
     
@@ -233,64 +276,142 @@ document.addEventListener('DOMContentLoaded', function() {
             recipientSelection.style.display = 'none';
         }
     });
+    
+    // Load recipients when page loads if "selected" is already checked and no preselected recipients
+    if (sendSelectedRadio.checked) {
+        recipientSelection.style.display = 'block';
+        const existingCheckboxes = document.querySelectorAll('.recipient-checkbox');
+        if (existingCheckboxes.length === 0) {
+            loadRecipients();
+        } else {
+            // Update counter for preselected recipients
+            updateRecipientCounter();
+            // Add event listeners to existing checkboxes
+            existingCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateRecipientCounter);
+            });
+        }
+    }
 });
 
 function loadRecipients() {
     const recipientList = document.getElementById('recipient-list');
-    recipientList.innerHTML = 'Loading recipients...';
+    recipientList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm" role="status"></div> Loading recipients...</div>';
     
     fetch('/api/recipients')
         .then(response => {
             if (!response.ok) {
-                throw new Error('Failed to fetch recipients');
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(recipients => {
-            if (recipients.length === 0) {
-                recipientList.innerHTML = '<p class="text-muted">No recipients found. <a href="/recipients/add">Add some recipients</a> first.</p>';
+            console.log('Loaded recipients:', recipients); // Debug log
+            
+            if (!recipients || recipients.length === 0) {
+                recipientList.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        No recipients found. <a href="/recipients/add" class="alert-link">Add some recipients</a> first.
+                    </div>
+                `;
                 return;
             }
             
-            let html = '<div class="form-group">';
-            html += '<div class="mb-2"><small class="text-muted">Select recipients to send to:</small></div>';
+            let html = '<div class="mb-3">';
+            html += '<div class="d-flex justify-content-between align-items-center mb-2">';
+            html += '<small class="text-muted">Select recipients to send to:</small>';
+            html += '<div>';
+            html += '<button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="selectAllRecipients()">Select All</button>';
+            html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllRecipients()">Deselect All</button>';
+            html += '</div>';
+            html += '</div>';
+            
+            html += '<div class="recipient-checkboxes" style="max-height: 300px; overflow-y: auto;">';
             
             recipients.forEach(recipient => {
                 html += `
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="recipient_ids" value="${recipient.id}" id="recipient_${recipient.id}">
-                        <label class="form-check-label small" for="recipient_${recipient.id}">
-                            <strong>${recipient.name}</strong>
-                            ${recipient.company ? `<span class="badge bg-secondary ms-1">${recipient.company}</span>` : ''}
-                            <br>
-                            <span class="text-muted">${recipient.email}</span>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input recipient-checkbox" type="checkbox" name="recipient_ids" value="${recipient.id}" id="recipient_${recipient.id}">
+                        <label class="form-check-label" for="recipient_${recipient.id}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>${recipient.name}</strong>
+                                    ${recipient.company ? `<span class="badge bg-secondary ms-2">${recipient.company}</span>` : ''}
+                                    ${recipient.position ? `<span class="badge bg-info ms-1">${recipient.position}</span>` : ''}
+                                    <br>
+                                    <small class="text-muted">${recipient.email}</small>
+                                </div>
+                            </div>
                         </label>
                     </div>
                 `;
             });
             
             html += '</div>';
-            html += '<div class="mt-2">';
-            html += '<button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="selectAllRecipients()">Select All</button>';
-            html += '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllRecipients()">Deselect All</button>';
             html += '</div>';
             
             recipientList.innerHTML = html;
+            
+            // Add change event to update counter
+            updateRecipientCounter();
+            document.querySelectorAll('.recipient-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', updateRecipientCounter);
+            });
         })
         .catch(error => {
             console.error('Error loading recipients:', error);
-            recipientList.innerHTML = '<p class="text-danger">Error loading recipients. Please refresh the page and try again.</p>';
+            recipientList.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading recipients: ${error.message}
+                    <br><small>Please refresh the page and try again.</small>
+                </div>
+            `;
         });
 }
 
 function selectAllRecipients() {
-    const checkboxes = document.querySelectorAll('input[name="recipient_ids"]');
-    checkboxes.forEach(checkbox => checkbox.checked = true);
+    const checkboxes = document.querySelectorAll('.recipient-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateRecipientCounter();
 }
 
 function deselectAllRecipients() {
-    const checkboxes = document.querySelectorAll('input[name="recipient_ids"]');
-    checkboxes.forEach(checkbox => checkbox.checked = false);
+    const checkboxes = document.querySelectorAll('.recipient-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateRecipientCounter();
 }
+
+function updateRecipientCounter() {
+    const checkedBoxes = document.querySelectorAll('.recipient-checkbox:checked');
+    const counter = document.getElementById('recipient-counter');
+    if (counter) {
+        counter.textContent = `${checkedBoxes.length} selected`;
+    }
+}
+
+// Form validation before submit
+document.querySelector('form').addEventListener('submit', function(e) {
+    const sendTo = document.querySelector('input[name="send_to"]:checked').value;
+    
+    if (sendTo === 'selected') {
+        const selectedRecipients = document.querySelectorAll('.recipient-checkbox:checked');
+        if (selectedRecipients.length === 0) {
+            e.preventDefault();
+            alert('Please select at least one recipient or choose "Send to all recipients".');
+            return false;
+        }
+    }
+    
+    // Show sending indicator
+    const submitBtn = document.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+});
 </script>
 {% endblock %} 

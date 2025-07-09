@@ -456,13 +456,23 @@ def delete_recipient(recipient_id):
     flash('Recipient deleted successfully!', 'success')
     return redirect(url_for('recipients'))
 
-@app.route('/compose')
+@app.route('/compose', methods=['GET', 'POST'])
 def compose():
-    """Compose email"""
     if 'credentials' not in session:
         return redirect(url_for('index'))
     
-    return render_template('compose.html')
+    preselected_recipients = []
+    
+    # Handle POST request with preselected recipients
+    if request.method == 'POST':
+        preselected_ids = request.form.getlist('preselected_recipients')
+        if preselected_ids:
+            placeholders = ','.join(['?' for _ in preselected_ids])
+            cursor = get_db().cursor() # Get a new cursor for the compose page
+            cursor.execute(f'SELECT * FROM recipients WHERE id IN ({placeholders})', preselected_ids)
+            preselected_recipients = cursor.fetchall()
+    
+    return render_template('compose.html', preselected_recipients=preselected_recipients)
 
 def get_gmail_service():
     """Get Gmail service with token refresh handling"""
@@ -745,6 +755,25 @@ def api_recipients():
         })
     
     return jsonify(recipients_list)
+
+@app.route('/api/recipients/bulk-delete', methods=['POST'])
+def bulk_delete_recipients():
+    try:
+        data = request.get_json()
+        recipient_ids = data.get('recipient_ids', [])
+        
+        if not recipient_ids:
+            return jsonify({'success': False, 'message': 'No recipients selected'})
+        
+        # Delete recipients
+        placeholders = ','.join(['?' for _ in recipient_ids])
+        cursor = get_db().cursor() # Get a new cursor for the compose page
+        cursor.execute(f'DELETE FROM recipients WHERE id IN ({placeholders})', recipient_ids)
+        get_db().commit() # Commit the transaction
+        
+        return jsonify({'success': True, 'message': f'Deleted {len(recipient_ids)} recipients'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/campaigns')
 def campaigns():
