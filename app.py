@@ -755,9 +755,10 @@ def campaigns():
     active_campaigns = 0
     
     for campaign in campaigns:
-        total_sent += campaign.get('sent_count', 0) or 0
-        total_errors += campaign.get('error_count', 0) or 0
-        if campaign.get('status') in ['sending', 'draft']:
+        # Use bracket notation for SQLite Row objects
+        total_sent += campaign['sent_count'] or 0
+        total_errors += campaign['error_count'] or 0
+        if campaign['status'] in ['sending', 'draft']:
             active_campaigns += 1
     
     conn.close()
