@@ -207,24 +207,24 @@
                     </button>
                 </form>
                 
-                {% if groups %}
                 <div class="border-top pt-3">
-                    <small class="text-muted mb-2 d-block">Existing Groups:</small>
+                    <small class="text-muted mb-2 d-block">Filter by group:</small>
+                    <div class="mb-2">
+                        <a href="{{ url_for('recipients') }}" class="btn btn-sm w-100 mb-1 {% if not selected_group_id %}btn-primary text-white{% else %}btn-outline-primary{% endif %}">
+                            <i class="fas fa-users me-1"></i> All Recipients
+                        </a>
+                    </div>
                     {% for group in groups %}
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div>
-                            <strong>{{ group.name }}</strong>
-                            {% if group.description %}
-                            <br><small class="text-muted">{{ group.description }}</small>
-                            {% endif %}
-                        </div>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteGroup({{ group.id }})">
+                        <a href="{{ url_for('recipients', group_id=group.id) }}" class="btn btn-sm w-100 text-start {% if selected_group_id and group.id|string == selected_group_id|string %}btn-primary text-white{% else %}btn-outline-primary{% endif %}" title="{{ group.description }}">
+                            <i class="fas fa-folder me-1"></i> {{ group.name }}
+                        </a>
+                        <button class="btn btn-sm btn-outline-danger ms-2" onclick="deleteGroup({{ group.id }})">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
                     {% endfor %}
                 </div>
-                {% endif %}
             </div>
         </div>
 

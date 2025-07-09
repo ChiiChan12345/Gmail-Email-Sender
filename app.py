@@ -363,23 +363,26 @@ def recipients():
     if 'credentials' not in session:
         return redirect(url_for('index'))
     
+    group_id = request.args.get('group_id')
     conn = get_db()
     cursor = conn.cursor()
     
-    # Get all recipients
-    cursor.execute('''
-        SELECT * FROM recipients 
-        ORDER BY name
-    ''')
+    if group_id:
+        cursor.execute('''
+            SELECT * FROM recipients WHERE group_id = ? ORDER BY name
+        ''', (group_id,))
+    else:
+        cursor.execute('''
+            SELECT * FROM recipients ORDER BY name
+        ''')
     recipients = cursor.fetchall()
     
-    # Get all groups
     cursor.execute('SELECT * FROM recipient_groups ORDER BY name')
     groups = cursor.fetchall()
     
     conn.close()
     
-    return render_template('recipients.html', recipients=recipients, groups=groups)
+    return render_template('recipients.html', recipients=recipients, groups=groups, selected_group_id=group_id)
 
 @app.route('/recipients/add', methods=['GET', 'POST'])
 def add_recipient():

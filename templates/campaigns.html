@@ -299,7 +299,7 @@ function viewCampaign(id) {
                             <td>${email.recipient_email}</td>
                             <td>${email.status === 'sent' ? '<span class="badge bg-success">Sent</span>' : '<span class="badge bg-danger">Error</span>'}</td>
                             <td><small>${email.sent_at}</small></td>
-                            <td><small class="text-danger">${email.error_message || '-'}</small></td>
+                            <td><small class="text-danger" title="${email.error_message || '-'}">{{ email.error_message[:60] ~ ('...' if email.error_message and email.error_message|length > 60 else '') }}</small></td>
                         </tr>
                     `;
                 });
