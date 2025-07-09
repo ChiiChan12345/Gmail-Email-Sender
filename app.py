@@ -237,7 +237,7 @@ def login():
     authorization_url, state = flow.authorization_url(
         access_type='offline',
         include_granted_scopes='true',
-        prompt='select_account'
+        prompt='consent'  # Force consent to ensure refresh token
     )
     
     print(f"DEBUG: Login - Authorization URL: {authorization_url}")
@@ -295,6 +295,12 @@ def callback():
         flow.fetch_token(authorization_response=request.url.replace('http://', 'https://'))
         
         credentials = flow.credentials
+        
+        # Debug the credentials object
+        print(f"DEBUG: Flow credentials token: {bool(credentials.token)}")
+        print(f"DEBUG: Flow credentials refresh_token: {bool(credentials.refresh_token)}")
+        print(f"DEBUG: Flow credentials refresh_token value: '{credentials.refresh_token}'")
+        
         session['credentials'] = {
             'token': credentials.token,
             'refresh_token': credentials.refresh_token,
@@ -304,6 +310,14 @@ def callback():
             'scopes': list(credentials.scopes) if credentials.scopes else SCOPES
         }
         session.permanent = True
+        
+        # Debug what we actually saved
+        saved_creds = session['credentials']
+        print(f"DEBUG: Saved token: {bool(saved_creds.get('token'))}")
+        print(f"DEBUG: Saved refresh_token: {bool(saved_creds.get('refresh_token'))}")
+        print(f"DEBUG: Saved refresh_token value: '{saved_creds.get('refresh_token')}'")
+        print(f"DEBUG: Saved client_id: {bool(saved_creds.get('client_id'))}")
+        print(f"DEBUG: Saved client_secret: {bool(saved_creds.get('client_secret'))}")
         
         print(f"DEBUG: Credentials saved to session: {bool(session.get('credentials'))}")
         print(f"DEBUG: Session ID: {session.get('_id', 'No ID')}")
@@ -494,29 +508,41 @@ def get_gmail_service():
         print(f"DEBUG: Credentials data keys: {list(creds_data.keys())}")
         
         # Validate required fields
-        if not creds_data.get('token'):
+        token = creds_data.get('token')
+        refresh_token = creds_data.get('refresh_token')
+        client_id = creds_data.get('client_id')
+        client_secret = creds_data.get('client_secret')
+        
+        print(f"DEBUG: token exists: {bool(token)}, length: {len(token) if token else 0}")
+        print(f"DEBUG: refresh_token exists: {bool(refresh_token)}, length: {len(refresh_token) if refresh_token else 0}")
+        print(f"DEBUG: client_id exists: {bool(client_id)}")
+        print(f"DEBUG: client_secret exists: {bool(client_secret)}")
+        
+        if not token or not token.strip():
             raise Exception("No access token in credentials")
-        if not creds_data.get('refresh_token'):
-            raise Exception("No refresh token in credentials")
-        if not creds_data.get('client_id'):
+        if not refresh_token or not refresh_token.strip():
+            # If no refresh token, try to work with current token but warn user
+            print("WARNING: No refresh token available - token cannot be refreshed")
+            # Don't fail completely, just proceed without refresh capability
+        if not client_id or not client_id.strip():
             raise Exception("No client_id in credentials")
-        if not creds_data.get('client_secret'):
+        if not client_secret or not client_secret.strip():
             raise Exception("No client_secret in credentials")
         
         # Create credentials object
         credentials = google.oauth2.credentials.Credentials(
-            token=creds_data['token'],
-            refresh_token=creds_data['refresh_token'],
+            token=token,
+            refresh_token=refresh_token if refresh_token and refresh_token.strip() else None,
             token_uri='https://oauth2.googleapis.com/token',
-            client_id=creds_data['client_id'],
-            client_secret=creds_data['client_secret'],
+            client_id=client_id,
+            client_secret=client_secret,
             scopes=creds_data.get('scopes', ['https://www.googleapis.com/auth/gmail.send'])
         )
         
         print(f"DEBUG: Credentials created successfully")
         
-        # Always try to refresh if we have a refresh token (safer approach)
-        if credentials.refresh_token:
+        # Try to refresh if we have a refresh token
+        if credentials.refresh_token and credentials.refresh_token.strip():
             try:
                 print("Attempting token refresh...")
                 request = google.auth.transport.requests.Request()
@@ -529,6 +555,8 @@ def get_gmail_service():
                 print(f"Token refresh failed: {refresh_error}")
                 # If refresh fails, try with existing token
                 pass
+        else:
+            print("No refresh token available - using existing access token")
         
         # Build and return service
         service = build('gmail', 'v1', credentials=credentials)
