@@ -254,67 +254,88 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Recipient Selection
+// Recipient Selection - Fixed Version
 document.addEventListener('DOMContentLoaded', function() {
     const sendAllRadio = document.getElementById('send_all');
     const sendSelectedRadio = document.getElementById('send_selected');
     const recipientSelection = document.getElementById('recipient-selection');
     
-    sendSelectedRadio.addEventListener('change', function() {
-        if (this.checked) {
+    // Initialize recipient selection visibility
+    function initializeRecipientSelection() {
+        if (sendSelectedRadio && sendSelectedRadio.checked) {
             recipientSelection.style.display = 'block';
-            // Only load recipients if we don't have preselected ones
             const existingCheckboxes = document.querySelectorAll('.recipient-checkbox');
             if (existingCheckboxes.length === 0) {
                 loadRecipients();
+            } else {
+                setupPreselectedRecipients();
             }
-        }
-    });
-    
-    sendAllRadio.addEventListener('change', function() {
-        if (this.checked) {
+        } else {
             recipientSelection.style.display = 'none';
         }
-    });
-    
-    // Load recipients when page loads if "selected" is already checked and no preselected recipients
-    if (sendSelectedRadio.checked) {
-        recipientSelection.style.display = 'block';
-        const existingCheckboxes = document.querySelectorAll('.recipient-checkbox');
-        if (existingCheckboxes.length === 0) {
-            loadRecipients();
-        } else {
-            // Update counter for preselected recipients
-            updateRecipientCounter();
-            // Add event listeners to existing checkboxes
-            existingCheckboxes.forEach(checkbox => {
-                checkbox.addEventListener('change', updateRecipientCounter);
-            });
-        }
     }
+    
+    // Setup preselected recipients
+    function setupPreselectedRecipients() {
+        updateRecipientCounter();
+        document.querySelectorAll('.recipient-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', updateRecipientCounter);
+        });
+    }
+    
+    // Radio button event listeners
+    if (sendSelectedRadio) {
+        sendSelectedRadio.addEventListener('change', function() {
+            if (this.checked) {
+                recipientSelection.style.display = 'block';
+                const existingCheckboxes = document.querySelectorAll('.recipient-checkbox');
+                if (existingCheckboxes.length === 0) {
+                    loadRecipients();
+                }
+            }
+        });
+    }
+    
+    if (sendAllRadio) {
+        sendAllRadio.addEventListener('change', function() {
+            if (this.checked) {
+                recipientSelection.style.display = 'none';
+            }
+        });
+    }
+    
+    // Initialize on page load
+    initializeRecipientSelection();
 });
 
 function loadRecipients() {
     const recipientList = document.getElementById('recipient-list');
+    if (!recipientList) {
+        console.error('Recipient list element not found');
+        return;
+    }
+    
     recipientList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm" role="status"></div> Loading recipients...</div>';
     
     fetch('/api/recipients')
         .then(response => {
+            console.log('Response status:', response.status);
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             return response.json();
         })
         .then(recipients => {
-            console.log('Loaded recipients:', recipients); // Debug log
+            console.log('Loaded recipients:', recipients);
             
-            if (!recipients || recipients.length === 0) {
+            if (!Array.isArray(recipients) || recipients.length === 0) {
                 recipientList.innerHTML = `
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle me-2"></i>
                         No recipients found. <a href="/recipients/add" class="alert-link">Add some recipients</a> first.
                     </div>
                 `;
+                updateRecipientCounter();
                 return;
             }
             
@@ -330,17 +351,22 @@ function loadRecipients() {
             html += '<div class="recipient-checkboxes" style="max-height: 300px; overflow-y: auto;">';
             
             recipients.forEach(recipient => {
+                const name = recipient.name || 'Unknown';
+                const email = recipient.email || 'No email';
+                const company = recipient.company || '';
+                const position = recipient.position || '';
+                
                 html += `
                     <div class="form-check mb-2">
                         <input class="form-check-input recipient-checkbox" type="checkbox" name="recipient_ids" value="${recipient.id}" id="recipient_${recipient.id}">
                         <label class="form-check-label" for="recipient_${recipient.id}">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <strong>${recipient.name}</strong>
-                                    ${recipient.company ? `<span class="badge bg-secondary ms-2">${recipient.company}</span>` : ''}
-                                    ${recipient.position ? `<span class="badge bg-info ms-1">${recipient.position}</span>` : ''}
+                                    <strong>${name}</strong>
+                                    ${company ? `<span class="badge bg-secondary ms-2">${company}</span>` : ''}
+                                    ${position ? `<span class="badge bg-info ms-1">${position}</span>` : ''}
                                     <br>
-                                    <small class="text-muted">${recipient.email}</small>
+                                    <small class="text-muted">${email}</small>
                                 </div>
                             </div>
                         </label>
@@ -358,6 +384,8 @@ function loadRecipients() {
             document.querySelectorAll('.recipient-checkbox').forEach(checkbox => {
                 checkbox.addEventListener('change', updateRecipientCounter);
             });
+            
+            console.log('Recipients loaded successfully');
         })
         .catch(error => {
             console.error('Error loading recipients:', error);
@@ -368,6 +396,7 @@ function loadRecipients() {
                     <br><small>Please refresh the page and try again.</small>
                 </div>
             `;
+            updateRecipientCounter();
         });
 }
 

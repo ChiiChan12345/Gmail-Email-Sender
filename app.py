@@ -16,6 +16,8 @@ from email.mime.base import MIMEBase
 from email import encoders
 import csv
 import io
+import google.oauth2.credentials
+import google.auth.transport.requests
 
 # Force HTTPS for OAuth2 on Railway
 if 'railway.app' in os.environ.get('REDIRECT_URI', ''):
@@ -293,7 +295,14 @@ def callback():
         flow.fetch_token(authorization_response=request.url.replace('http://', 'https://'))
         
         credentials = flow.credentials
-        session['credentials'] = credentials_to_dict(credentials)
+        session['credentials'] = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': 'https://oauth2.googleapis.com/token',
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'scopes': list(credentials.scopes) if credentials.scopes else SCOPES
+        }
         session.permanent = True
         
         print(f"DEBUG: Credentials saved to session: {bool(session.get('credentials'))}")
@@ -475,23 +484,51 @@ def compose():
     return render_template('compose.html', preselected_recipients=preselected_recipients)
 
 def get_gmail_service():
-    """Get Gmail service with token refresh handling"""
-    if 'credentials' not in session:
-        raise ValueError("No credentials found in session")
-    
+    """Get Gmail service with automatic token refresh"""
     try:
-        credentials = credentials_from_dict(session['credentials'])
+        if 'credentials' not in session:
+            raise Exception("No credentials in session")
         
-        # Check if token is expired and refresh if needed
+        # Get credentials from session
+        creds_data = session['credentials']
+        
+        # Create credentials object with all required fields
+        credentials = google.oauth2.credentials.Credentials(
+            token=creds_data.get('token'),
+            refresh_token=creds_data.get('refresh_token'),
+            token_uri=creds_data.get('token_uri', 'https://oauth2.googleapis.com/token'),
+            client_id=creds_data.get('client_id', os.environ.get('GOOGLE_CLIENT_ID')),
+            client_secret=creds_data.get('client_secret', os.environ.get('GOOGLE_CLIENT_SECRET')),
+            scopes=creds_data.get('scopes', ['https://www.googleapis.com/auth/gmail.send'])
+        )
+        
+        # Check if token needs refresh
         if credentials.expired and credentials.refresh_token:
-            from google.auth.transport.requests import Request
-            credentials.refresh(Request())
+            print("Token expired, refreshing...")
+            request = google.auth.transport.requests.Request()
+            credentials.refresh(request)
+            
             # Update session with new token
-            session['credentials'] = credentials_to_dict(credentials)
+            session['credentials'] = {
+                'token': credentials.token,
+                'refresh_token': credentials.refresh_token,
+                'token_uri': credentials.token_uri,
+                'client_id': credentials.client_id,
+                'client_secret': credentials.client_secret,
+                'scopes': credentials.scopes
+            }
+            print("Token refreshed successfully")
         
-        return build('gmail', 'v1', credentials=credentials)
+        # Build and return service
+        service = build('gmail', 'v1', credentials=credentials)
+        return service
+        
     except Exception as e:
-        raise ValueError(f"Failed to create Gmail service: {str(e)}")
+        print(f"Error getting Gmail service: {str(e)}")
+        # Clear invalid credentials
+        if 'credentials' in session:
+            del session['credentials']
+        raise Exception(f"Gmail service error: {str(e)}. Please re-authenticate.")
 
 @app.route('/send', methods=['POST'])
 def send_email():
@@ -562,7 +599,7 @@ def send_email():
     # Send emails
     try:
         service = get_gmail_service()
-    except ValueError as e:
+    except Exception as e:
         flash(f'Authentication error: {str(e)}. Please log in again.', 'error')
         conn.close()
         return redirect(url_for('login'))
