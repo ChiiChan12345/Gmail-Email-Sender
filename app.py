@@ -373,8 +373,6 @@ def recipients():
     ''')
     recipients = cursor.fetchall()
     
-    conn.close()
-    
     # Get all groups
     cursor.execute('SELECT * FROM recipient_groups ORDER BY name')
     groups = cursor.fetchall()
