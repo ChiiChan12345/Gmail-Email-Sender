@@ -491,33 +491,44 @@ def get_gmail_service():
         
         # Get credentials from session
         creds_data = session['credentials']
+        print(f"DEBUG: Credentials data keys: {list(creds_data.keys())}")
         
-        # Create credentials object with all required fields
+        # Validate required fields
+        if not creds_data.get('token'):
+            raise Exception("No access token in credentials")
+        if not creds_data.get('refresh_token'):
+            raise Exception("No refresh token in credentials")
+        if not creds_data.get('client_id'):
+            raise Exception("No client_id in credentials")
+        if not creds_data.get('client_secret'):
+            raise Exception("No client_secret in credentials")
+        
+        # Create credentials object
         credentials = google.oauth2.credentials.Credentials(
-            token=creds_data.get('token'),
-            refresh_token=creds_data.get('refresh_token'),
-            token_uri=creds_data.get('token_uri', 'https://oauth2.googleapis.com/token'),
-            client_id=creds_data.get('client_id', os.environ.get('GOOGLE_CLIENT_ID')),
-            client_secret=creds_data.get('client_secret', os.environ.get('GOOGLE_CLIENT_SECRET')),
+            token=creds_data['token'],
+            refresh_token=creds_data['refresh_token'],
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=creds_data['client_id'],
+            client_secret=creds_data['client_secret'],
             scopes=creds_data.get('scopes', ['https://www.googleapis.com/auth/gmail.send'])
         )
         
-        # Check if token needs refresh
-        if credentials.expired and credentials.refresh_token:
-            print("Token expired, refreshing...")
-            request = google.auth.transport.requests.Request()
-            credentials.refresh(request)
-            
-            # Update session with new token
-            session['credentials'] = {
-                'token': credentials.token,
-                'refresh_token': credentials.refresh_token,
-                'token_uri': credentials.token_uri,
-                'client_id': credentials.client_id,
-                'client_secret': credentials.client_secret,
-                'scopes': credentials.scopes
-            }
-            print("Token refreshed successfully")
+        print(f"DEBUG: Credentials created successfully")
+        
+        # Always try to refresh if we have a refresh token (safer approach)
+        if credentials.refresh_token:
+            try:
+                print("Attempting token refresh...")
+                request = google.auth.transport.requests.Request()
+                credentials.refresh(request)
+                
+                # Update session with new token
+                session['credentials']['token'] = credentials.token
+                print("Token refreshed successfully")
+            except Exception as refresh_error:
+                print(f"Token refresh failed: {refresh_error}")
+                # If refresh fails, try with existing token
+                pass
         
         # Build and return service
         service = build('gmail', 'v1', credentials=credentials)
@@ -525,7 +536,7 @@ def get_gmail_service():
         
     except Exception as e:
         print(f"Error getting Gmail service: {str(e)}")
-        # Clear invalid credentials
+        # Clear invalid credentials and force re-authentication
         if 'credentials' in session:
             del session['credentials']
         raise Exception(f"Gmail service error: {str(e)}. Please re-authenticate.")
@@ -602,7 +613,7 @@ def send_email():
     except Exception as e:
         flash(f'Authentication error: {str(e)}. Please log in again.', 'error')
         conn.close()
-        return redirect(url_for('login'))
+        return redirect(url_for('logout'))
     
     success_count = 0
     error_count = 0
@@ -998,8 +1009,18 @@ def debug_session():
         creds_info = session['credentials']
         session_info['credentials_keys'] = list(creds_info.keys()) if isinstance(creds_info, dict) else 'Not a dict'
         session_info['has_token'] = 'token' in creds_info if isinstance(creds_info, dict) else False
+        session_info['has_refresh_token'] = 'refresh_token' in creds_info if isinstance(creds_info, dict) else False
+        session_info['has_client_id'] = 'client_id' in creds_info if isinstance(creds_info, dict) else False
+        session_info['has_client_secret'] = 'client_secret' in creds_info if isinstance(creds_info, dict) else False
     
     return f"<h1>Session Debug Info</h1><pre>{json.dumps(session_info, indent=2)}</pre>"
+
+@app.route('/force-reauth')
+def force_reauth():
+    """Force re-authentication by clearing session"""
+    session.clear()
+    flash('Session cleared. Please log in again.', 'info')
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     init_db()
