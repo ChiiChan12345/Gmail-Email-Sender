@@ -464,6 +464,25 @@ def compose():
     
     return render_template('compose.html')
 
+def get_gmail_service():
+    """Get Gmail service with token refresh handling"""
+    if 'credentials' not in session:
+        raise ValueError("No credentials found in session")
+    
+    try:
+        credentials = credentials_from_dict(session['credentials'])
+        
+        # Check if token is expired and refresh if needed
+        if credentials.expired and credentials.refresh_token:
+            from google.auth.transport.requests import Request
+            credentials.refresh(Request())
+            # Update session with new token
+            session['credentials'] = credentials_to_dict(credentials)
+        
+        return build('gmail', 'v1', credentials=credentials)
+    except Exception as e:
+        raise ValueError(f"Failed to create Gmail service: {str(e)}")
+
 @app.route('/send', methods=['POST'])
 def send_email():
     """Send email"""
@@ -498,14 +517,14 @@ def send_email():
         cursor.execute('SELECT * FROM recipients WHERE email IS NOT NULL AND email != ""')
     else:
         recipient_ids = request.form.getlist('recipient_ids')
-        if recipient_ids:
-            placeholders = ','.join(['?' for _ in recipient_ids])
-            cursor.execute(f'SELECT * FROM recipients WHERE id IN ({placeholders}) AND email IS NOT NULL AND email != ""', 
-                         recipient_ids)
-        else:
+        if not recipient_ids:
             flash('No recipients selected!', 'error')
             conn.close()
             return redirect(url_for('compose'))
+        
+        placeholders = ','.join(['?' for _ in recipient_ids])
+        cursor.execute(f'SELECT * FROM recipients WHERE id IN ({placeholders}) AND email IS NOT NULL AND email != ""', 
+                     recipient_ids)
     
     recipients = cursor.fetchall()
     
@@ -532,13 +551,10 @@ def send_email():
     
     # Send emails
     try:
-        credentials = credentials_from_dict(session['credentials'])
-        service = build('gmail', 'v1', credentials=credentials)
+        service = get_gmail_service()
     except ValueError as e:
         flash(f'Authentication error: {str(e)}. Please log in again.', 'error')
-        return redirect(url_for('login'))
-    except Exception as e:
-        flash(f'Failed to connect to Gmail: {str(e)}. Please try logging in again.', 'error')
+        conn.close()
         return redirect(url_for('login'))
     
     success_count = 0
@@ -804,6 +820,63 @@ def api_campaign_details(campaign_id):
         'campaign': campaign_dict,
         'emails': emails_list
     })
+
+@app.route('/campaigns/<int:campaign_id>/download-csv')
+def download_campaign_csv(campaign_id):
+    """Download campaign results as CSV"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Get campaign details
+    cursor.execute('SELECT * FROM email_campaigns WHERE id = ?', (campaign_id,))
+    campaign = cursor.fetchone()
+    
+    if not campaign:
+        flash('Campaign not found!', 'error')
+        conn.close()
+        return redirect(url_for('campaigns'))
+    
+    # Get email results
+    cursor.execute('''
+        SELECT recipient_email, recipient_name, status, sent_at, error_message
+        FROM sent_emails 
+        WHERE campaign_id = ? 
+        ORDER BY sent_at DESC
+    ''', (campaign_id,))
+    emails = cursor.fetchall()
+    
+    conn.close()
+    
+    # Create CSV content
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write headers
+    writer.writerow(['Recipient Name', 'Email', 'Status', 'Sent At', 'Error Message'])
+    
+    # Write data
+    for email in emails:
+        writer.writerow([
+            email['recipient_name'] or '',
+            email['recipient_email'] or '',
+            email['status'] or '',
+            email['sent_at'] or '',
+            email['error_message'] or ''
+        ])
+    
+    # Prepare response
+    output.seek(0)
+    
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename=campaign_{campaign_id}_results.csv'
+        }
+    )
 
 @app.route('/privacy')
 def privacy():

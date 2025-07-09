@@ -240,7 +240,12 @@ function loadRecipients() {
     recipientList.innerHTML = 'Loading recipients...';
     
     fetch('/api/recipients')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch recipients');
+            }
+            return response.json();
+        })
         .then(recipients => {
             if (recipients.length === 0) {
                 recipientList.innerHTML = '<p class="text-muted">No recipients found. <a href="/recipients/add">Add some recipients</a> first.</p>';
@@ -274,7 +279,7 @@ function loadRecipients() {
         })
         .catch(error => {
             console.error('Error loading recipients:', error);
-            recipientList.innerHTML = '<p class="text-danger">Error loading recipients. Please refresh the page.</p>';
+            recipientList.innerHTML = '<p class="text-danger">Error loading recipients. Please refresh the page and try again.</p>';
         });
 }
 

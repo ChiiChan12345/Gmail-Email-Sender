@@ -186,6 +186,10 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <a id="downloadCsvBtn" href="#" class="btn btn-outline-success me-auto" style="display: none;">
+                    <i class="fas fa-download me-2"></i>
+                    Download CSV
+                </a>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
@@ -298,6 +302,11 @@ function viewCampaign(id) {
             }
             
             document.getElementById('campaign-details').innerHTML = html;
+            
+            // Show and update CSV download button
+            const downloadBtn = document.getElementById('downloadCsvBtn');
+            downloadBtn.href = `/campaigns/${id}/download-csv`;
+            downloadBtn.style.display = 'inline-block';
         })
         .catch(error => {
             console.error('Error loading campaign details:', error);
