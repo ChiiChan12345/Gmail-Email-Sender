@@ -536,10 +536,17 @@ def get_gmail_service():
         
     except Exception as e:
         print(f"Error getting Gmail service: {str(e)}")
-        # Clear invalid credentials and force re-authentication
-        if 'credentials' in session:
-            del session['credentials']
-        raise Exception(f"Gmail service error: {str(e)}. Please re-authenticate.")
+        
+        # Only clear credentials for specific credential-related errors
+        error_msg = str(e).lower()
+        if any(keyword in error_msg for keyword in ['credentials', 'token', 'refresh', 'oauth', 'unauthorized']):
+            print("Clearing invalid credentials due to auth error")
+            if 'credentials' in session:
+                del session['credentials']
+            raise Exception(f"Authentication failed: {str(e)}. Please log in again.")
+        else:
+            # For other errors, don't clear credentials
+            raise Exception(f"Gmail service error: {str(e)}. Please try again.")
 
 @app.route('/send', methods=['POST'])
 def send_email():
@@ -611,9 +618,17 @@ def send_email():
     try:
         service = get_gmail_service()
     except Exception as e:
-        flash(f'Authentication error: {str(e)}. Please log in again.', 'error')
+        # Update campaign status to failed and redirect to campaigns
+        cursor.execute('''
+            UPDATE email_campaigns 
+            SET status = ?, error_count = ?, completed_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', ('failed', len(recipients), campaign_id))
+        conn.commit()
         conn.close()
-        return redirect(url_for('logout'))
+        
+        flash(f'Authentication error: {str(e)}. Campaign failed. Please try re-authenticating if this persists.', 'error')
+        return redirect(url_for('campaigns', show_campaign=campaign_id))
     
     success_count = 0
     error_count = 0
@@ -711,8 +726,9 @@ def send_email():
         flash(f'Campaign completed! Successfully sent {success_count} emails!', 'success')
     if error_count > 0:
         flash(f'{error_count} emails failed to send.', 'warning')
-        
-    return redirect(url_for('campaigns'))
+    
+    # Redirect to campaigns page with campaign details modal open
+    return redirect(url_for('campaigns', show_campaign=campaign_id))
 
 def create_message(sender, to, subject, body):
     """Create email message"""

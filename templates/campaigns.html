@@ -336,5 +336,22 @@ function calculateSuccessRate(campaign) {
     if (!campaign.total_recipients || campaign.total_recipients === 0) return 0;
     return Math.round(((campaign.sent_count || 0) / campaign.total_recipients) * 100);
 }
+
+// Auto-show campaign modal if show_campaign parameter is present
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const showCampaignId = urlParams.get('show_campaign');
+    
+    if (showCampaignId) {
+        // Small delay to ensure page is fully loaded
+        setTimeout(() => {
+            viewCampaign(parseInt(showCampaignId));
+        }, 500);
+        
+        // Clean up URL to remove the parameter
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+    }
+});
 </script>
 {% endblock %} 
