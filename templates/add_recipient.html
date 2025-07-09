@@ -24,18 +24,24 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" action="{{ url_for('add_recipient') }}">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="name" name="name" required>
+                                <label for="name" class="form-label">
+                                    Name <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="name" name="name" required 
+                                       placeholder="Enter full name">
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
-                                <input type="email" class="form-control" id="email" name="email" required>
+                                <label for="email" class="form-label">
+                                    Email <span class="text-danger">*</span>
+                                </label>
+                                <input type="email" class="form-control" id="email" name="email" required 
+                                       placeholder="Enter email address">
                             </div>
                         </div>
                     </div>
@@ -44,13 +50,15 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="company" class="form-label">Company</label>
-                                <input type="text" class="form-control" id="company" name="company" placeholder="Optional">
+                                <input type="text" class="form-control" id="company" name="company" 
+                                       placeholder="Enter company name (optional)">
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="position" class="form-label">Position</label>
-                                <input type="text" class="form-control" id="position" name="position" placeholder="Optional">
+                                <input type="text" class="form-control" id="position" name="position" 
+                                       placeholder="Enter job position (optional)">
                             </div>
                         </div>
                     </div>
@@ -59,28 +67,19 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="phone" class="form-label">Phone</label>
-                                <input type="tel" class="form-control" id="phone" name="phone" placeholder="Optional">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="group_id" class="form-label">Group</label>
-                                <select class="form-select" id="group_id" name="group_id">
-                                    <option value="">No group</option>
-                                    {% for group in groups %}
-                                        <option value="{{ group.id }}">{{ group.name }}</option>
-                                    {% endfor %}
-                                </select>
+                                <input type="tel" class="form-control" id="phone" name="phone" 
+                                       placeholder="Enter phone number (optional)">
                             </div>
                         </div>
                     </div>
                     
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="{{ url_for('recipients') }}" class="btn btn-outline-secondary me-md-2">
+                        <a href="{{ url_for('recipients') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>
                             Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-2"></i>
+                            <i class="fas fa-plus me-2"></i>
                             Add Recipient
                         </button>
                     </div>
@@ -88,52 +87,34 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card">
-            <div class="card-body">
-                <h6 class="card-title">
+            <div class="card-header">
+                <h6 class="mb-0">
                     <i class="fas fa-info-circle me-2"></i>
-                    Tips
+                    Help
                 </h6>
+            </div>
+            <div class="card-body">
                 <ul class="list-unstyled small">
                     <li class="mb-2">
                         <i class="fas fa-check text-success me-2"></i>
-                        Name and email are required
+                        <strong>Name and Email</strong> are required fields
                     </li>
                     <li class="mb-2">
                         <i class="fas fa-check text-success me-2"></i>
-                        All other fields are optional
+                        <strong>Company, Position, Phone</strong> are optional but helpful for personalization
                     </li>
                     <li class="mb-2">
                         <i class="fas fa-check text-success me-2"></i>
-                        Names will be used for personalization
+                        Use <code>{company}</code> and <code>{position}</code> in emails for personalization
                     </li>
                     <li class="mb-2">
                         <i class="fas fa-check text-success me-2"></i>
-                        Company and position help with targeting
-                    </li>
-                    <li class="mb-2">
-                        <i class="fas fa-check text-success me-2"></i>
-                        Duplicate emails will be ignored
+                        Email addresses must be unique
                     </li>
                 </ul>
-            </div>
-        </div>
-        
-        <div class="card mt-3">
-            <div class="card-body">
-                <h6 class="card-title">
-                    <i class="fas fa-magic me-2"></i>
-                    Personalization Variables
-                </h6>
-                <div class="small">
-                    <code>{name}</code> - Full name<br>
-                    <code>{first_name}</code> - First name<br>
-                    <code>{company}</code> - Company name<br>
-                    <code>{position}</code> - Job position<br>
-                    <code>{email}</code> - Email address
-                </div>
             </div>
         </div>
     </div>

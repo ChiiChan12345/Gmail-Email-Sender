@@ -93,24 +93,14 @@ def init_db():
     ''')
     
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS recipient_groups (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    cursor.execute('''
         CREATE TABLE IF NOT EXISTS recipients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
+            email TEXT UNIQUE NOT NULL,
             company TEXT,
             position TEXT,
             phone TEXT,
-            group_id INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (group_id) REFERENCES recipient_groups (id)
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
@@ -342,100 +332,14 @@ def recipients():
     
     # Get all recipients
     cursor.execute('''
-        SELECT r.*, g.name as group_name 
-        FROM recipients r 
-        LEFT JOIN recipient_groups g ON r.group_id = g.id 
-        ORDER BY r.name
+        SELECT * FROM recipients 
+        ORDER BY name
     ''')
     recipients = cursor.fetchall()
     
-    # Get all groups
-    cursor.execute('SELECT * FROM recipient_groups ORDER BY name')
-    groups = cursor.fetchall()
-    
     conn.close()
     
-    return render_template('recipients.html', recipients=recipients, groups=groups)
-
-@app.route('/groups/create', methods=['POST'])
-def create_group():
-    """Create a new recipient group"""
-    if 'credentials' not in session:
-        return redirect(url_for('index'))
-    
-    group_name = request.form['group_name']
-    
-    if not group_name.strip():
-        flash('Group name cannot be empty!', 'error')
-        return redirect(url_for('recipients'))
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    try:
-        cursor.execute('INSERT INTO recipient_groups (name) VALUES (?)', (group_name,))
-        conn.commit()
-        flash(f'Group "{group_name}" created successfully!', 'success')
-    except sqlite3.IntegrityError:
-        flash('Group name already exists!', 'error')
-    finally:
-        conn.close()
-    
-    return redirect(url_for('recipients'))
-
-@app.route('/recipients/move_to_group', methods=['POST'])
-def move_to_group():
-    """Move recipient to a group"""
-    if 'credentials' not in session:
-        return redirect(url_for('index'))
-    
-    recipient_id = request.form['recipient_id']
-    group_id = request.form.get('group_id') or None
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('UPDATE recipients SET group_id = ? WHERE id = ?', (group_id, recipient_id))
-    conn.commit()
-    conn.close()
-    
-    flash('Recipient moved successfully!', 'success')
-    return redirect(url_for('recipients'))
-
-@app.route('/recipients/delete/<int:recipient_id>', methods=['POST'])
-def delete_recipient(recipient_id):
-    """Delete a recipient"""
-    if 'credentials' not in session:
-        return redirect(url_for('index'))
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM recipients WHERE id = ?', (recipient_id,))
-    conn.commit()
-    conn.close()
-    
-    flash('Recipient deleted successfully!', 'success')
-    return redirect(url_for('recipients'))
-
-@app.route('/groups/delete/<int:group_id>', methods=['POST'])
-def delete_group(group_id):
-    """Delete a group (recipients will be moved to no group)"""
-    if 'credentials' not in session:
-        return redirect(url_for('index'))
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    # Move all recipients in this group to no group
-    cursor.execute('UPDATE recipients SET group_id = NULL WHERE group_id = ?', (group_id,))
-    
-    # Delete the group
-    cursor.execute('DELETE FROM recipient_groups WHERE id = ?', (group_id,))
-    
-    conn.commit()
-    conn.close()
-    
-    flash('Group deleted successfully! Recipients moved to no group.', 'success')
-    return redirect(url_for('recipients'))
+    return render_template('recipients.html', recipients=recipients)
 
 @app.route('/recipients/add', methods=['GET', 'POST'])
 def add_recipient():
@@ -443,25 +347,21 @@ def add_recipient():
     if 'credentials' not in session:
         return redirect(url_for('index'))
     
-    # Get groups for the form
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM recipient_groups ORDER BY name')
-    groups = cursor.fetchall()
-    
     if request.method == 'POST':
         name = request.form['name']
         email = request.form['email']
         company = request.form.get('company', '').strip()
         position = request.form.get('position', '').strip()
         phone = request.form.get('phone', '').strip()
-        group_id = request.form.get('group_id') or None
+        
+        conn = get_db()
+        cursor = conn.cursor()
         
         try:
             cursor.execute('''
-                INSERT INTO recipients (name, email, company, position, phone, group_id) 
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (name, email, company, position, phone, group_id))
+                INSERT INTO recipients (name, email, company, position, phone) 
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, email, company, position, phone))
             conn.commit()
             flash('Recipient added successfully!', 'success')
         except sqlite3.IntegrityError:
@@ -471,8 +371,7 @@ def add_recipient():
         
         return redirect(url_for('recipients'))
     
-    conn.close()
-    return render_template('add_recipient.html', groups=groups)
+    return render_template('add_recipient.html')
 
 @app.route('/recipients/upload', methods=['POST'])
 def upload_recipients():
@@ -497,11 +396,6 @@ def upload_recipients():
             conn = get_db()
             cursor = conn.cursor()
             
-            # Create a group for this CSV upload
-            group_name = f"CSV Upload - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-            cursor.execute('INSERT INTO recipient_groups (name) VALUES (?)', (group_name,))
-            group_id = cursor.lastrowid
-            
             added_count = 0
             skipped_count = 0
             
@@ -525,9 +419,9 @@ def upload_recipients():
                 
                 try:
                     cursor.execute('''
-                        INSERT INTO recipients (name, email, company, position, phone, group_id) 
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (name, email, company, position, phone, group_id))
+                        INSERT INTO recipients (name, email, company, position, phone) 
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (name, email, company, position, phone))
                     added_count += 1
                 except sqlite3.IntegrityError:
                     skipped_count += 1  # Skip duplicates
@@ -536,7 +430,7 @@ def upload_recipients():
             conn.close()
             
             if added_count > 0:
-                flash(f'Added {added_count} recipients to group "{group_name}"! Skipped {skipped_count} invalid/duplicate entries.', 'success')
+                flash(f'Added {added_count} recipients! Skipped {skipped_count} invalid/duplicate entries.', 'success')
             else:
                 flash(f'No valid recipients found in CSV. Skipped {skipped_count} entries.', 'warning')
                 
@@ -545,6 +439,21 @@ def upload_recipients():
     else:
         flash('Please upload a CSV file!', 'error')
     
+    return redirect(url_for('recipients'))
+
+@app.route('/recipients/delete/<int:recipient_id>', methods=['POST'])
+def delete_recipient(recipient_id):
+    """Delete a recipient"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM recipients WHERE id = ?', (recipient_id,))
+    conn.commit()
+    conn.close()
+    
+    flash('Recipient deleted successfully!', 'success')
     return redirect(url_for('recipients'))
 
 @app.route('/compose')
@@ -622,8 +531,15 @@ def send_email():
     conn.commit()
     
     # Send emails
-    credentials = Credentials(**session['credentials'])
-    service = build('gmail', 'v1', credentials=credentials)
+    try:
+        credentials = credentials_from_dict(session['credentials'])
+        service = build('gmail', 'v1', credentials=credentials)
+    except ValueError as e:
+        flash(f'Authentication error: {str(e)}. Please log in again.', 'error')
+        return redirect(url_for('login'))
+    except Exception as e:
+        flash(f'Failed to connect to Gmail: {str(e)}. Please try logging in again.', 'error')
+        return redirect(url_for('login'))
     
     success_count = 0
     error_count = 0
@@ -726,10 +642,21 @@ def send_email():
 
 def create_message(sender, to, subject, body):
     """Create email message"""
-    message = MIMEText(body)
+    # Create multipart message to support both text and HTML
+    message = MIMEMultipart('alternative')
     message['to'] = to
     message['from'] = sender
     message['subject'] = subject
+    
+    # Check if body contains HTML tags
+    if '<' in body and '>' in body:
+        # HTML content
+        html_part = MIMEText(body, 'html')
+        message.attach(html_part)
+    else:
+        # Plain text content
+        text_part = MIMEText(body, 'plain')
+        message.attach(text_part)
     
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
     return {'raw': raw_message}
@@ -756,6 +683,23 @@ def credentials_to_dict(credentials):
         'scopes': credentials.scopes
     }
 
+def credentials_from_dict(credentials_dict):
+    """Convert dictionary to credentials with validation"""
+    required_fields = ['token', 'token_uri', 'client_id', 'client_secret']
+    
+    for field in required_fields:
+        if field not in credentials_dict or credentials_dict[field] is None:
+            raise ValueError(f"Missing required credential field: {field}")
+    
+    return Credentials(
+        token=credentials_dict['token'],
+        refresh_token=credentials_dict.get('refresh_token'),
+        token_uri=credentials_dict['token_uri'],
+        client_id=credentials_dict['client_id'],
+        client_secret=credentials_dict['client_secret'],
+        scopes=credentials_dict.get('scopes', SCOPES)
+    )
+
 @app.route('/api/recipients')
 def api_recipients():
     """API endpoint to get recipients as JSON"""
@@ -765,10 +709,9 @@ def api_recipients():
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT r.id, r.name, r.email, r.company, r.position, r.phone, r.group_id, g.name as group_name
-        FROM recipients r 
-        LEFT JOIN recipient_groups g ON r.group_id = g.id 
-        ORDER BY r.name
+        SELECT id, name, email, company, position, phone
+        FROM recipients 
+        ORDER BY name
     ''')
     recipients = cursor.fetchall()
     conn.close()
@@ -782,9 +725,7 @@ def api_recipients():
             'email': recipient['email'],
             'company': recipient['company'],
             'position': recipient['position'],
-            'phone': recipient['phone'],
-            'group_id': recipient['group_id'],
-            'group_name': recipient['group_name']
+            'phone': recipient['phone']
         })
     
     return jsonify(recipients_list)

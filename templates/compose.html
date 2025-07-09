@@ -23,10 +23,19 @@
         <div class="col-md-8">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-envelope me-2"></i>
-                        Email Content
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-envelope me-2"></i>
+                            Email Content
+                        </h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="htmlToggle">
+                            <label class="form-check-label" for="htmlToggle">
+                                <i class="fas fa-code me-1"></i>
+                                HTML
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
@@ -39,6 +48,8 @@
                         <label for="body" class="form-label">Message</label>
                         <textarea class="form-control" id="body" name="body" rows="15" required 
                                   placeholder="Write your email message here..."></textarea>
+                        <textarea class="form-control" id="htmlBody" name="htmlBody" rows="15" style="display: none;" 
+                                  placeholder="Enter HTML code here..."></textarea>
                     </div>
                     
                     <div class="mb-4">
@@ -76,36 +87,6 @@
         </div>
         
         <div class="col-md-4">
-            <!-- Quick Templates -->
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h6 class="mb-0">
-                        <i class="fas fa-magic me-2"></i>
-                        Quick Templates
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadTemplate('greeting')">
-                            <i class="fas fa-hand-wave me-1"></i>
-                            Greeting
-                        </button>
-                        <button type="button" class="btn btn-outline-info btn-sm" onclick="loadTemplate('business')">
-                            <i class="fas fa-briefcase me-1"></i>
-                            Business Outreach
-                        </button>
-                        <button type="button" class="btn btn-outline-success btn-sm" onclick="loadTemplate('followup')">
-                            <i class="fas fa-reply me-1"></i>
-                            Follow-up
-                        </button>
-                        <button type="button" class="btn btn-outline-warning btn-sm" onclick="loadTemplate('newsletter')">
-                            <i class="fas fa-newspaper me-1"></i>
-                            Newsletter
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Personalization Variables -->
             <div class="card mb-3">
                 <div class="card-header">
@@ -165,7 +146,7 @@
                         </li>
                         <li class="mb-2">
                             <i class="fas fa-check text-success me-2"></i>
-                            Preview your email before sending
+                            Toggle HTML mode for advanced formatting
                         </li>
                         <li class="mb-2">
                             <i class="fas fa-check text-success me-2"></i>
@@ -186,6 +167,7 @@
 {% block scripts %}
 <script>
 // Initialize TinyMCE
+let editor;
 tinymce.init({
     selector: '#body',
     height: 300,
@@ -196,36 +178,42 @@ tinymce.init({
         'insertdatetime media table paste code help wordcount'
     ],
     toolbar: 'undo redo | formatselect | bold italic | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | link | code',
-    content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px }'
+    content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px }',
+    setup: function(ed) {
+        editor = ed;
+    }
 });
 
-// Quick Templates
-const templates = {
-    greeting: {
-        subject: "Hello {name}!",
-        body: "Hi {name},\n\nI hope this email finds you well. I wanted to reach out and connect with you.\n\nBest regards,\n[Your Name]"
-    },
-    business: {
-        subject: "Business Opportunity - {company}",
-        body: "Dear {name},\n\nI hope you're doing well at {company}. I have an exciting business opportunity that might interest you.\n\nAs a {position}, you might find this relevant to your work. I'd love to discuss this further with you.\n\nBest regards,\n[Your Name]"
-    },
-    followup: {
-        subject: "Following up on our conversation",
-        body: "Hi {name},\n\nI wanted to follow up on our recent conversation. Thank you for taking the time to speak with me.\n\nAs promised, I'm reaching out to continue our discussion.\n\nLooking forward to hearing from you.\n\nBest regards,\n[Your Name]"
-    },
-    newsletter: {
-        subject: "Monthly Newsletter - {month} {year}",
-        body: "Hello {name},\n\nWelcome to our {month} newsletter! Here's what's new this month:\n\n• [Update 1]\n• [Update 2]\n• [Update 3]\n\nThank you for being part of our community.\n\nBest regards,\n[Your Name]"
-    }
-};
-
-function loadTemplate(templateName) {
-    const template = templates[templateName];
-    if (template) {
-        document.getElementById('subject').value = template.subject;
-        tinymce.get('body').setContent(template.body.replace(/\n/g, '<br>'));
-    }
-}
+// HTML/Text Toggle
+document.addEventListener('DOMContentLoaded', function() {
+    const htmlToggle = document.getElementById('htmlToggle');
+    const visualBody = document.getElementById('body');
+    const htmlBody = document.getElementById('htmlBody');
+    
+    htmlToggle.addEventListener('change', function() {
+        if (this.checked) {
+            // Switch to HTML mode
+            if (editor) {
+                htmlBody.value = editor.getContent();
+                editor.hide();
+            }
+            visualBody.style.display = 'none';
+            htmlBody.style.display = 'block';
+            htmlBody.name = 'body';
+            visualBody.name = '';
+        } else {
+            // Switch to visual mode
+            if (editor) {
+                editor.setContent(htmlBody.value);
+                editor.show();
+            }
+            htmlBody.style.display = 'none';
+            visualBody.style.display = 'block';
+            visualBody.name = 'body';
+            htmlBody.name = '';
+        }
+    });
+});
 
 // Recipient Selection
 document.addEventListener('DOMContentLoaded', function() {
@@ -267,7 +255,9 @@ function loadRecipients() {
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="recipient_ids" value="${recipient.id}" id="recipient_${recipient.id}">
                         <label class="form-check-label small" for="recipient_${recipient.id}">
-                            <strong>${recipient.name}</strong><br>
+                            <strong>${recipient.name}</strong>
+                            ${recipient.company ? `<span class="badge bg-secondary ms-1">${recipient.company}</span>` : ''}
+                            <br>
                             <span class="text-muted">${recipient.email}</span>
                         </label>
                     </div>
