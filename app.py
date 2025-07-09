@@ -18,6 +18,10 @@ import csv
 import io
 import google.oauth2.credentials
 import google.auth.transport.requests
+import threading
+import queue
+import time
+from datetime import datetime, timedelta
 
 # Force HTTPS for OAuth2 on Railway
 if 'railway.app' in os.environ.get('REDIRECT_URI', ''):
@@ -578,9 +582,12 @@ def get_gmail_service():
 
 @app.route('/send', methods=['POST'])
 def send_email():
-    """Send email"""
+    """Send email using queue system"""
     if 'credentials' not in session:
         return redirect(url_for('index'))
+    
+    # Start queue processor if not running
+    start_queue_processor()
     
     subject = request.form['subject']
     body = request.form['body']
@@ -591,21 +598,10 @@ def send_email():
         flash('Subject and message cannot be empty!', 'error')
         return redirect(url_for('compose'))
     
-    # Check hourly email limit
+    # Get recipients
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT COUNT(*) FROM sent_emails 
-        WHERE sent_at >= datetime('now', '-1 hour') AND status = 'sent'
-    ''')
-    emails_this_hour = cursor.fetchone()[0]
     
-    if emails_this_hour >= SPAM_PREVENTION['max_per_hour']:
-        flash(f'Hourly email limit reached ({SPAM_PREVENTION["max_per_hour"]} emails). Please wait before sending more.', 'warning')
-        conn.close()
-        return redirect(url_for('compose'))
-    
-    # Get recipients first to count total
     if send_to == 'all':
         cursor.execute('SELECT * FROM recipients WHERE email IS NOT NULL AND email != ""')
     else:
@@ -626,136 +622,62 @@ def send_email():
         conn.close()
         return redirect(url_for('compose'))
     
-    # Check if adding these emails would exceed hourly limit
-    if emails_this_hour + len(recipients) > SPAM_PREVENTION['max_per_hour']:
-        remaining_slots = SPAM_PREVENTION['max_per_hour'] - emails_this_hour
-        flash(f'Cannot send {len(recipients)} emails. Only {remaining_slots} slots remaining this hour.', 'warning')
-        conn.close()
-        return redirect(url_for('compose'))
-    
-    # Create campaign with total count
+    # Create campaign with queued status
     campaign_name = f"Campaign {datetime.now().strftime('%Y-%m-%d %H:%M')}"
     cursor.execute('''
         INSERT INTO email_campaigns (name, subject, body, status, total_recipients) 
         VALUES (?, ?, ?, ?, ?)
-    ''', (campaign_name, subject, body, 'sending', len(recipients)))
+    ''', (campaign_name, subject, body, 'queued', len(recipients)))
     campaign_id = cursor.lastrowid
-    conn.commit()
-    
-    # Send emails
-    try:
-        service = get_gmail_service()
-    except Exception as e:
-        # Update campaign status to failed and redirect to campaigns
-        cursor.execute('''
-            UPDATE email_campaigns 
-            SET status = ?, error_count = ?, completed_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', ('failed', len(recipients), campaign_id))
-        conn.commit()
-        conn.close()
-        
-        flash(f'Authentication error: {str(e)}. Campaign failed. Please try re-authenticating if this persists.', 'error')
-        return redirect(url_for('campaigns', show_campaign=campaign_id))
-    
-    success_count = 0
-    error_count = 0
-    
-    for recipient in recipients:
-        try:
-            # Access SQLite row data properly
-            recipient_email = recipient['email'] if recipient['email'] else ''
-            recipient_name = recipient['name'] if recipient['name'] else 'Friend'
-            recipient_company = recipient['company'] if recipient['company'] else 'Your Company'
-            recipient_position = recipient['position'] if recipient['position'] else 'Valued Customer'
-            recipient_phone = recipient['phone'] if recipient['phone'] else ''
-            
-            # Validate recipient email
-            if not recipient_email or not recipient_email.strip():
-                error_count += 1
-                log_sent_email(campaign_id, 'unknown', recipient_name, 'error', 'Empty email address')
-                continue
-                
-            recipient_email = recipient_email.strip()
-            
-            # Validate email format
-            if '@' not in recipient_email or '.' not in recipient_email:
-                error_count += 1
-                log_sent_email(campaign_id, recipient_email, recipient_name, 'error', 'Invalid email format')
-                continue
-            
-            # Enhanced personalization - replace multiple variables
-            personalized_subject = subject
-            personalized_body = body
-            
-            personalization_vars = {
-                '{name}': recipient_name,
-                '{email}': recipient_email,
-                '{company}': recipient_company,
-                '{position}': recipient_position,
-                '{phone}': recipient_phone,
-                '{first_name}': recipient_name.split()[0] if recipient_name else 'Friend',
-                '{last_name}': recipient_name.split()[-1] if len(recipient_name.split()) > 1 else '',
-                '{date}': datetime.now().strftime('%B %d, %Y'),
-                '{time}': datetime.now().strftime('%I:%M %p'),
-                '{day}': datetime.now().strftime('%A'),
-                '{month}': datetime.now().strftime('%B'),
-                '{year}': datetime.now().strftime('%Y')
-            }
-            
-            for var, value in personalization_vars.items():
-                personalized_subject = personalized_subject.replace(var, value)
-                personalized_body = personalized_body.replace(var, value)
-            
-            # Create message
-            message = create_message(
-                sender='me',
-                to=recipient_email,
-                subject=personalized_subject,
-                body=personalized_body
-            )
-            
-            # Send message
-            service.users().messages().send(userId='me', body=message).execute()
-            
-            # Log sent email
-            log_sent_email(campaign_id, recipient_email, recipient_name, 'sent')
-            
-            success_count += 1
-            
-            # Anti-spam delay (30-60 seconds random)
-            delay = random.randint(SPAM_PREVENTION['min_delay'], SPAM_PREVENTION['max_delay'])
-            print(f"DEBUG: Waiting {delay} seconds before next email...")
-            time.sleep(delay)
-            
-        except HttpError as error:
-            error_message = str(error)
-            log_sent_email(campaign_id, recipient_email, recipient_name, 'error', error_message)
-            flash(f'Failed to send to {recipient_email}: {error}', 'error')
-            error_count += 1
-        except Exception as error:
-            error_message = str(error)
-            log_sent_email(campaign_id, recipient_email, recipient_name, 'error', error_message)
-            flash(f'Unexpected error sending to {recipient_email}: {error}', 'error')
-            error_count += 1
-    
-    # Update campaign completion status
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        UPDATE email_campaigns 
-        SET status = ?, sent_count = ?, error_count = ?, completed_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    ''', ('completed', success_count, error_count, campaign_id))
     conn.commit()
     conn.close()
     
-    if success_count > 0:
-        flash(f'Campaign completed! Successfully sent {success_count} emails!', 'success')
-    if error_count > 0:
-        flash(f'{error_count} emails failed to send.', 'warning')
+    # Get credentials for queue processing
+    credentials_data = session['credentials']
     
-    # Redirect to campaigns page with campaign details modal open
+    # Add all emails to queue
+    for recipient in recipients:
+        # Access SQLite row data properly
+        recipient_email = recipient['email'] if recipient['email'] else ''
+        recipient_name = recipient['name'] if recipient['name'] else 'Friend'
+        recipient_company = recipient['company'] if recipient['company'] else 'Your Company'
+        recipient_position = recipient['position'] if recipient['position'] else 'Valued Customer'
+        recipient_phone = recipient['phone'] if recipient['phone'] else ''
+        
+        # Skip invalid emails
+        if not recipient_email or not recipient_email.strip() or '@' not in recipient_email:
+            continue
+        
+        # Create personalization variables
+        personalization_vars = {
+            '{name}': recipient_name,
+            '{email}': recipient_email,
+            '{company}': recipient_company,
+            '{position}': recipient_position,
+            '{phone}': recipient_phone,
+            '{first_name}': recipient_name.split()[0] if recipient_name else 'Friend',
+            '{last_name}': recipient_name.split()[-1] if len(recipient_name.split()) > 1 else '',
+            '{date}': datetime.now().strftime('%B %d, %Y'),
+            '{time}': datetime.now().strftime('%I:%M %p'),
+            '{day}': datetime.now().strftime('%A'),
+            '{month}': datetime.now().strftime('%B'),
+            '{year}': datetime.now().strftime('%Y')
+        }
+        
+        # Create email task
+        email_task = {
+            'campaign_id': campaign_id,
+            'recipient': dict(recipient),
+            'subject': subject,
+            'body': body,
+            'personalization_vars': personalization_vars,
+            'credentials': credentials_data
+        }
+        
+        # Add to queue
+        email_queue.put(email_task)
+    
+    flash(f'Email campaign queued! {len(recipients)} emails added to queue. Processing will begin immediately and respect the 50 emails/hour limit.', 'success')
     return redirect(url_for('campaigns', show_campaign=campaign_id))
 
 def create_message(sender, to, subject, body):
@@ -942,6 +864,18 @@ def api_campaign_details(campaign_id):
         'emails': emails_list
     })
 
+@app.route('/api/campaigns/<int:campaign_id>/progress')
+def api_campaign_progress(campaign_id):
+    """Get real-time campaign progress"""
+    try:
+        progress = get_campaign_progress(campaign_id)
+        if not progress:
+            return jsonify({'error': 'Campaign not found'}), 404
+        
+        return jsonify(progress)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/campaigns/<int:campaign_id>/download-csv')
 def download_campaign_csv(campaign_id):
     """Download campaign results as CSV"""
@@ -1066,8 +1000,270 @@ def force_reauth():
     flash('Session cleared. Please log in again.', 'info')
     return redirect(url_for('index'))
 
+# Email queue and processing
+email_queue = queue.Queue()
+queue_processor_running = False
+queue_lock = threading.Lock()
+
+def start_queue_processor():
+    """Start the background email queue processor"""
+    global queue_processor_running
+    
+    with queue_lock:
+        if queue_processor_running:
+            return
+        queue_processor_running = True
+    
+    def process_queue():
+        global queue_processor_running
+        print("Email queue processor started")
+        
+        while queue_processor_running:
+            try:
+                # Check if we can send emails (hourly limit)
+                if can_send_email():
+                    try:
+                        # Get next email from queue (timeout after 10 seconds)
+                        email_task = email_queue.get(timeout=10)
+                        
+                        # Process the email
+                        process_email_task(email_task)
+                        
+                        # Mark task as done
+                        email_queue.task_done()
+                        
+                        # Wait between emails (30-60 seconds)
+                        delay = random.randint(30, 60)
+                        print(f"Queue processor waiting {delay} seconds...")
+                        time.sleep(delay)
+                        
+                    except queue.Empty:
+                        # No emails in queue, wait a bit
+                        time.sleep(5)
+                        continue
+                else:
+                    # Can't send emails due to hourly limit, wait 5 minutes
+                    print("Hourly limit reached, queue processor waiting 5 minutes...")
+                    time.sleep(300)  # 5 minutes
+                    
+            except Exception as e:
+                print(f"Error in queue processor: {str(e)}")
+                time.sleep(10)  # Wait before retrying
+        
+        print("Email queue processor stopped")
+    
+    # Start the processor in a background thread
+    processor_thread = threading.Thread(target=process_queue, daemon=True)
+    processor_thread.start()
+
+def can_send_email():
+    """Check if we can send an email based on hourly limit"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT COUNT(*) FROM sent_emails 
+            WHERE sent_at >= datetime('now', '-1 hour') AND status = 'sent'
+        ''')
+        emails_this_hour = cursor.fetchone()[0]
+        conn.close()
+        
+        return emails_this_hour < SPAM_PREVENTION['max_per_hour']
+    except Exception as e:
+        print(f"Error checking email limit: {str(e)}")
+        return False
+
+def process_email_task(email_task):
+    """Process a single email task from the queue"""
+    try:
+        campaign_id = email_task['campaign_id']
+        recipient = email_task['recipient']
+        subject = email_task['subject']
+        body = email_task['body']
+        personalization_vars = email_task['personalization_vars']
+        
+        # Update campaign status to show it's being processed
+        update_campaign_status(campaign_id, 'sending')
+        
+        # Get Gmail service
+        credentials_data = email_task['credentials']
+        service = create_gmail_service_from_data(credentials_data)
+        
+        # Personalize content
+        personalized_subject = subject
+        personalized_body = body
+        
+        for var, value in personalization_vars.items():
+            personalized_subject = personalized_subject.replace(var, value)
+            personalized_body = personalized_body.replace(var, value)
+        
+        # Create and send message
+        message = create_message(
+            sender='me',
+            to=recipient['email'],
+            subject=personalized_subject,
+            body=personalized_body
+        )
+        
+        service.users().messages().send(userId='me', body=message).execute()
+        
+        # Log successful send
+        log_sent_email(campaign_id, recipient['email'], recipient['name'], 'sent')
+        
+        print(f"Email sent successfully to {recipient['email']}")
+        
+        # Check if campaign is complete
+        check_campaign_completion(campaign_id)
+        
+    except Exception as e:
+        # Log failed send
+        error_message = str(e)
+        log_sent_email(campaign_id, recipient['email'], recipient['name'], 'error', error_message)
+        print(f"Failed to send email to {recipient['email']}: {error_message}")
+        
+        # Check if campaign is complete
+        check_campaign_completion(campaign_id)
+
+def create_gmail_service_from_data(credentials_data):
+    """Create Gmail service from stored credentials data"""
+    credentials = google.oauth2.credentials.Credentials(
+        token=credentials_data['token'],
+        refresh_token=credentials_data.get('refresh_token'),
+        token_uri='https://oauth2.googleapis.com/token',
+        client_id=credentials_data['client_id'],
+        client_secret=credentials_data['client_secret'],
+        scopes=credentials_data.get('scopes', ['https://www.googleapis.com/auth/gmail.send'])
+    )
+    
+    # Try to refresh token if needed
+    if credentials.refresh_token and credentials.expired:
+        try:
+            request = google.auth.transport.requests.Request()
+            credentials.refresh(request)
+        except Exception as e:
+            print(f"Token refresh failed in queue processor: {e}")
+    
+    return build('gmail', 'v1', credentials=credentials)
+
+def update_campaign_status(campaign_id, status):
+    """Update campaign status"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE email_campaigns 
+            SET status = ? 
+            WHERE id = ?
+        ''', (status, campaign_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error updating campaign status: {str(e)}")
+
+def get_campaign_progress(campaign_id):
+    """Get real-time campaign progress"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get campaign info
+        cursor.execute('SELECT * FROM email_campaigns WHERE id = ?', (campaign_id,))
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            return None
+        
+        # Get sent/error counts
+        cursor.execute('''
+            SELECT 
+                COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent_count,
+                COUNT(CASE WHEN status = 'error' THEN 1 END) as error_count,
+                COUNT(*) as total_processed
+            FROM sent_emails 
+            WHERE campaign_id = ?
+        ''', (campaign_id,))
+        
+        counts = cursor.fetchone()
+        conn.close()
+        
+        return {
+            'campaign': dict(campaign),
+            'sent_count': counts['sent_count'] or 0,
+            'error_count': counts['error_count'] or 0,
+            'total_processed': counts['total_processed'] or 0,
+            'remaining': (campaign['total_recipients'] or 0) - (counts['total_processed'] or 0),
+            'queue_size': email_queue.qsize()
+        }
+        
+    except Exception as e:
+        print(f"Error getting campaign progress: {str(e)}")
+        return None
+
+def check_campaign_completion(campaign_id):
+    """Check if a campaign is complete and update its status"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Get campaign info
+        cursor.execute('SELECT * FROM email_campaigns WHERE id = ?', (campaign_id,))
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            conn.close()
+            return
+        
+        # Get counts
+        cursor.execute('''
+            SELECT 
+                COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent_count,
+                COUNT(CASE WHEN status = 'error' THEN 1 END) as error_count,
+                COUNT(*) as total_processed
+            FROM sent_emails 
+            WHERE campaign_id = ?
+        ''', (campaign_id,))
+        
+        counts = cursor.fetchone()
+        total_processed = counts['total_processed'] or 0
+        sent_count = counts['sent_count'] or 0
+        error_count = counts['error_count'] or 0
+        
+        # Check if campaign is complete
+        if total_processed >= campaign['total_recipients']:
+            # Determine final status
+            if error_count == 0:
+                final_status = 'completed'
+            elif sent_count == 0:
+                final_status = 'failed'
+            else:
+                final_status = 'completed'  # Partial success still counts as completed
+            
+            # Update campaign
+            cursor.execute('''
+                UPDATE email_campaigns 
+                SET status = ?, sent_count = ?, error_count = ?, completed_at = datetime('now')
+                WHERE id = ?
+            ''', (final_status, sent_count, error_count, campaign_id))
+            conn.commit()
+            
+            print(f"Campaign {campaign_id} completed: {sent_count} sent, {error_count} errors")
+        else:
+            # Update counts but keep sending status
+            cursor.execute('''
+                UPDATE email_campaigns 
+                SET sent_count = ?, error_count = ?
+                WHERE id = ?
+            ''', (sent_count, error_count, campaign_id))
+            conn.commit()
+        
+        conn.close()
+        
+    except Exception as e:
+        print(f"Error checking campaign completion: {str(e)}")
+
 if __name__ == '__main__':
     init_db()
+    start_queue_processor()  # Start the email queue processor
     
     print("🚀 Gmail Emailer Web App")
     print("=" * 50)
@@ -1084,6 +1280,8 @@ if __name__ == '__main__':
     print(f"🌐 Privacy Policy: {REDIRECT_URI.replace('/callback', '/privacy')}")
     print(f"🌐 Terms of Service: {REDIRECT_URI.replace('/callback', '/terms')}")
     print(f"🌐 Server will run on port: {os.environ.get('PORT', 5000)}")
+    print("\n📧 EMAIL QUEUE PROCESSOR: Started")
+    print("📧 Queue will process 50 emails per hour with 30-60 second delays")
     
     # Debug session configuration
     print(f"\n🔧 SESSION CONFIGURATION:")

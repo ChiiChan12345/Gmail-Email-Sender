@@ -86,23 +86,29 @@
                                 <span class="text-muted">{{ campaign.subject[:50] }}{% if campaign.subject|length > 50 %}...{% endif %}</span>
                             </td>
                             <td>
-                                {% if campaign.status == 'completed' %}
-                                    <span class="badge bg-success">
-                                        <i class="fas fa-check me-1"></i>Completed
-                                    </span>
-                                {% elif campaign.status == 'sending' %}
-                                    <span class="badge bg-primary">
-                                        <i class="fas fa-paper-plane me-1"></i>Sending
-                                    </span>
-                                {% elif campaign.status == 'draft' %}
-                                    <span class="badge bg-secondary">
-                                        <i class="fas fa-edit me-1"></i>Draft
-                                    </span>
-                                {% else %}
-                                    <span class="badge bg-warning">
-                                        <i class="fas fa-exclamation me-1"></i>{{ campaign.status|title }}
-                                    </span>
-                                {% endif %}
+                                <span id="status-{{ campaign.id }}">
+                                    {% if campaign.status == 'completed' %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check me-1"></i>Completed
+                                        </span>
+                                    {% elif campaign.status == 'sending' %}
+                                        <span class="badge bg-primary">
+                                            <i class="fas fa-paper-plane me-1"></i>Sending
+                                        </span>
+                                    {% elif campaign.status == 'queued' %}
+                                        <span class="badge bg-info">
+                                            <i class="fas fa-clock me-1"></i>Queued
+                                        </span>
+                                    {% elif campaign.status == 'draft' %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-edit me-1"></i>Draft
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-exclamation me-1"></i>{{ campaign.status|title }}
+                                        </span>
+                                    {% endif %}
+                                </span>
                             </td>
                             <td>
                                 <span class="badge bg-info">{{ campaign.total_recipients or 0 }}</span>
@@ -325,6 +331,8 @@ function getStatusBadge(status) {
             return '<span class="badge bg-success">Completed</span>';
         case 'sending':
             return '<span class="badge bg-primary">Sending</span>';
+        case 'queued':
+            return '<span class="badge bg-info">Queued</span>';
         case 'draft':
             return '<span class="badge bg-secondary">Draft</span>';
         default:
@@ -335,6 +343,79 @@ function getStatusBadge(status) {
 function calculateSuccessRate(campaign) {
     if (!campaign.total_recipients || campaign.total_recipients === 0) return 0;
     return Math.round(((campaign.sent_count || 0) / campaign.total_recipients) * 100);
+}
+
+// Real-time progress tracking
+let progressIntervals = {};
+
+function startProgressTracking(campaignId) {
+    // Clear any existing interval
+    if (progressIntervals[campaignId]) {
+        clearInterval(progressIntervals[campaignId]);
+    }
+    
+    // Start new interval
+    progressIntervals[campaignId] = setInterval(() => {
+        fetch(`/api/campaigns/${campaignId}/progress`)
+            .then(response => response.json())
+            .then(data => {
+                updateCampaignProgress(campaignId, data);
+                
+                // Stop tracking if campaign is completed
+                if (data.campaign.status === 'completed' || data.campaign.status === 'failed') {
+                    clearInterval(progressIntervals[campaignId]);
+                    delete progressIntervals[campaignId];
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching progress:', error);
+            });
+    }, 3000); // Update every 3 seconds
+}
+
+function updateCampaignProgress(campaignId, data) {
+    const campaign = data.campaign;
+    
+    // Update status badge
+    const statusElement = document.getElementById(`status-${campaignId}`);
+    if (statusElement) {
+        statusElement.innerHTML = getStatusBadge(campaign.status);
+    }
+    
+    // Update sent count
+    const sentElement = document.querySelector(`tr:has(#status-${campaignId}) .badge.bg-success`);
+    if (sentElement) {
+        sentElement.textContent = data.sent_count || 0;
+    }
+    
+    // Update error count
+    const errorElement = document.querySelector(`tr:has(#status-${campaignId}) .badge.bg-danger, tr:has(#status-${campaignId}) .badge.bg-light`);
+    if (errorElement) {
+        if (data.error_count > 0) {
+            errorElement.className = 'badge bg-danger';
+            errorElement.textContent = data.error_count;
+        } else {
+            errorElement.className = 'badge bg-light text-dark';
+            errorElement.textContent = '0';
+        }
+    }
+    
+    // Update success rate
+    const successRateElement = document.querySelector(`tr:has(#status-${campaignId}) td:nth-child(7) span`);
+    if (successRateElement && campaign.total_recipients > 0) {
+        const successRate = Math.round((data.sent_count / campaign.total_recipients) * 100);
+        successRateElement.textContent = `${successRate}%`;
+        
+        // Update color based on success rate
+        successRateElement.className = successRate >= 90 ? 'text-success' : 
+                                      successRate >= 70 ? 'text-warning' : 'text-danger';
+    }
+    
+    // Show queue info for active campaigns
+    if (campaign.status === 'sending' || campaign.status === 'queued') {
+        const queueInfo = `Queue: ${data.queue_size || 0} remaining`;
+        // You can add this info to the UI if needed
+    }
 }
 
 // Auto-show campaign modal if show_campaign parameter is present
@@ -352,6 +433,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
     }
+    
+    // Start progress tracking for queued/sending campaigns
+    const campaigns = document.querySelectorAll('[id^="status-"]');
+    campaigns.forEach(element => {
+        const campaignId = element.id.replace('status-', '');
+        const statusText = element.textContent.trim().toLowerCase();
+        
+        if (statusText.includes('queued') || statusText.includes('sending')) {
+            startProgressTracking(campaignId);
+        }
+    });
 });
 </script>
 {% endblock %} 
