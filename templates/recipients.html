@@ -196,10 +196,10 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('add_group') }}" class="mb-3">
                     <div class="mb-2">
-                        <input type="text" class="form-control form-control-sm" name="name" placeholder="Group name" required>
+                        <input type="text" class="form-control form-control-sm" name="name" id="group-name-input" tabindex="0" placeholder="Group name" required>
                     </div>
                     <div class="mb-2">
-                        <textarea class="form-control form-control-sm" name="description" placeholder="Description (optional)" rows="2"></textarea>
+                        <textarea class="form-control form-control-sm" name="description" id="group-description-input" tabindex="0" placeholder="Description (optional)" rows="2"></textarea>
                     </div>
                     <button type="submit" class="btn btn-primary btn-sm w-100">
                         <i class="fas fa-plus me-1"></i>
