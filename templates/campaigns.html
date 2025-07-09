@@ -151,6 +151,11 @@
                                 <button class="btn btn-sm btn-outline-primary" onclick="viewCampaign({{ campaign.id }})">
                                     <i class="fas fa-eye"></i>
                                 </button>
+                                {% if campaign.status in ['sending', 'queued'] %}
+                                <button class="btn btn-sm btn-outline-danger ms-1" onclick="cancelCampaign({{ campaign.id }})">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -335,8 +340,33 @@ function getStatusBadge(status) {
             return '<span class="badge bg-info">Queued</span>';
         case 'draft':
             return '<span class="badge bg-secondary">Draft</span>';
+        case 'cancelled':
+            return '<span class="badge bg-warning">Cancelled</span>';
         default:
             return `<span class="badge bg-warning">${status}</span>`;
+    }
+}
+
+function cancelCampaign(campaignId) {
+    if (confirm('Are you sure you want to cancel this campaign?')) {
+        fetch(`/api/campaigns/${campaignId}/cancel`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error cancelling campaign: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error cancelling campaign. Please try again.');
+        });
     }
 }
 

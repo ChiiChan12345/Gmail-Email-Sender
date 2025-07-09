@@ -110,6 +110,15 @@ def init_db():
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recipient_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     # Add missing columns to existing tables
     try:
         cursor.execute('ALTER TABLE email_campaigns ADD COLUMN status TEXT DEFAULT "draft"')
@@ -366,7 +375,13 @@ def recipients():
     
     conn.close()
     
-    return render_template('recipients.html', recipients=recipients)
+    # Get all groups
+    cursor.execute('SELECT * FROM recipient_groups ORDER BY name')
+    groups = cursor.fetchall()
+    
+    conn.close()
+    
+    return render_template('recipients.html', recipients=recipients, groups=groups)
 
 @app.route('/recipients/add', methods=['GET', 'POST'])
 def add_recipient():
@@ -482,6 +497,83 @@ def delete_recipient(recipient_id):
     
     flash('Recipient deleted successfully!', 'success')
     return redirect(url_for('recipients'))
+
+@app.route('/groups/add', methods=['POST'])
+def add_group():
+    """Add new recipient group"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    name = request.form.get('name', '').strip()
+    description = request.form.get('description', '').strip()
+    
+    if not name:
+        flash('Group name is required!', 'error')
+        return redirect(url_for('recipients'))
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO recipient_groups (name, description) 
+            VALUES (?, ?)
+        ''', (name, description))
+        conn.commit()
+        flash('Group created successfully!', 'success')
+    except sqlite3.IntegrityError:
+        flash('Group name already exists!', 'error')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('recipients'))
+
+@app.route('/groups/delete/<int:group_id>', methods=['POST'])
+def delete_group(group_id):
+    """Delete a recipient group"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Remove group assignment from recipients
+    cursor.execute('UPDATE recipients SET group_id = NULL WHERE group_id = ?', (group_id,))
+    
+    # Delete the group
+    cursor.execute('DELETE FROM recipient_groups WHERE id = ?', (group_id,))
+    conn.commit()
+    conn.close()
+    
+    flash('Group deleted successfully!', 'success')
+    return redirect(url_for('recipients'))
+
+@app.route('/recipients/assign-group', methods=['POST'])
+def assign_group():
+    """Assign recipients to a group"""
+    if 'credentials' not in session:
+        return redirect(url_for('index'))
+    
+    data = request.get_json()
+    recipient_ids = data.get('recipient_ids', [])
+    group_id = data.get('group_id')
+    
+    if not recipient_ids:
+        return jsonify({'success': False, 'message': 'No recipients selected'})
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    try:
+        placeholders = ','.join(['?' for _ in recipient_ids])
+        cursor.execute(f'UPDATE recipients SET group_id = ? WHERE id IN ({placeholders})', 
+                      [group_id] + recipient_ids)
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': f'Assigned {len(recipient_ids)} recipients to group'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
 
 @app.route('/compose', methods=['GET', 'POST'])
 def compose():
@@ -779,11 +871,13 @@ def bulk_delete_recipients():
         if not recipient_ids:
             return jsonify({'success': False, 'message': 'No recipients selected'})
         
-        # Delete recipients
+        # Delete recipients using single connection
+        conn = get_db()
+        cursor = conn.cursor()
         placeholders = ','.join(['?' for _ in recipient_ids])
-        cursor = get_db().cursor() # Get a new cursor for the compose page
         cursor.execute(f'DELETE FROM recipients WHERE id IN ({placeholders})', recipient_ids)
-        get_db().commit() # Commit the transaction
+        conn.commit()
+        conn.close()
         
         return jsonify({'success': True, 'message': f'Deleted {len(recipient_ids)} recipients'})
     except Exception as e:
@@ -873,6 +967,41 @@ def api_campaign_progress(campaign_id):
             return jsonify({'error': 'Campaign not found'}), 404
         
         return jsonify(progress)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/campaigns/<int:campaign_id>/cancel', methods=['POST'])
+def cancel_campaign(campaign_id):
+    """Cancel a campaign"""
+    if 'credentials' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Check if campaign exists and can be cancelled
+        cursor.execute('SELECT * FROM email_campaigns WHERE id = ?', (campaign_id,))
+        campaign = cursor.fetchone()
+        
+        if not campaign:
+            conn.close()
+            return jsonify({'error': 'Campaign not found'}), 404
+        
+        if campaign['status'] in ['completed', 'failed', 'cancelled']:
+            conn.close()
+            return jsonify({'error': 'Campaign cannot be cancelled'}), 400
+        
+        # Cancel the campaign
+        cursor.execute('''
+            UPDATE email_campaigns 
+            SET status = 'cancelled', completed_at = datetime('now')
+            WHERE id = ?
+        ''', (campaign_id,))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'Campaign cancelled'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1081,6 +1210,17 @@ def process_email_task(email_task):
         subject = email_task['subject']
         body = email_task['body']
         personalization_vars = email_task['personalization_vars']
+        
+        # Check if campaign is cancelled
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT status FROM email_campaigns WHERE id = ?', (campaign_id,))
+        campaign = cursor.fetchone()
+        conn.close()
+        
+        if campaign and campaign['status'] == 'cancelled':
+            print(f"Skipping email to {recipient['email']} - campaign {campaign_id} cancelled")
+            return
         
         # Update campaign status to show it's being processed
         update_campaign_status(campaign_id, 'sending')

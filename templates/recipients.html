@@ -49,6 +49,19 @@
                             <i class="fas fa-envelope me-1"></i>
                             Send Email
                         </button>
+                        <div class="btn-group me-2" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="fas fa-folder me-1"></i>
+                                Assign Group
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#" onclick="assignToGroup(null)">Remove from Group</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% for group in groups %}
+                                <li><a class="dropdown-item" href="#" onclick="assignToGroup({{ group.id }})">{{ group.name }}</a></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkDelete()">
                             <i class="fas fa-trash me-1"></i>
                             Delete Selected
@@ -169,6 +182,49 @@
                         </a>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Groups Management -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-folder me-2"></i>
+                    Groups
+                </h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_group') }}" class="mb-3">
+                    <div class="mb-2">
+                        <input type="text" class="form-control form-control-sm" name="name" placeholder="Group name" required>
+                    </div>
+                    <div class="mb-2">
+                        <textarea class="form-control form-control-sm" name="description" placeholder="Description (optional)" rows="2"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i class="fas fa-plus me-1"></i>
+                        Create Group
+                    </button>
+                </form>
+                
+                {% if groups %}
+                <div class="border-top pt-3">
+                    <small class="text-muted mb-2 d-block">Existing Groups:</small>
+                    {% for group in groups %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>{{ group.name }}</strong>
+                            {% if group.description %}
+                            <br><small class="text-muted">{{ group.description }}</small>
+                            {% endif %}
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteGroup({{ group.id }})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -337,11 +393,77 @@
                         <i class="fas fa-envelope me-1"></i>
                         Send Email
                     </button>
+                    <div class="btn-group me-2" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="fas fa-folder me-1"></i>
+                            Assign Group
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="assignToGroup(null)">Remove from Group</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% for group in groups %}
+                            <li><a class="dropdown-item" href="#" onclick="assignToGroup({{ group.id }})">{{ group.name }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkDelete()">
                         <i class="fas fa-trash me-1"></i>
                         Delete Selected
                     </button>
                 `;
+            });
+        }
+    }
+
+    function assignToGroup(groupId) {
+        const checkedBoxes = document.querySelectorAll('.recipient-checkbox:checked');
+        if (checkedBoxes.length === 0) {
+            alert('Please select at least one recipient.');
+            return;
+        }
+
+        const recipientIds = Array.from(checkedBoxes).map(cb => cb.value);
+        
+        fetch('/recipients/assign-group', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                recipient_ids: recipientIds,
+                group_id: groupId 
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error assigning group. Please try again.');
+        });
+    }
+
+    function deleteGroup(groupId) {
+        if (confirm('Are you sure you want to delete this group? Recipients will be unassigned but not deleted.')) {
+            fetch(`/groups/delete/${groupId}`, {
+                method: 'POST'
+            })
+            .then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error deleting group');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error deleting group');
             });
         }
     }
